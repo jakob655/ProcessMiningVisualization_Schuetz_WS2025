@@ -8,7 +8,7 @@ For reading in csv files. Returns a list of all cases.
 '''
 def read(filename, timeLabel = 'timestamp', caseLabel = 'case', eventLabel = 'event'):
         # use csv.Sniffer to detect the delimiter
-    with open(filename, 'r') as f:
+    with open(filename, 'r', encoding='utf-8-sig') as f:
         dialect = csv.Sniffer().sniff(f.read(1024))
         delimiter = dialect.delimiter
 

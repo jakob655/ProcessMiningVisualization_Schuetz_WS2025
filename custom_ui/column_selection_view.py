@@ -99,7 +99,7 @@ class ColumnSelectionView(QWidget):
     # CALL BEFORE USAGE
     def load_csv(self, filepath):
         self.filePath = filepath
-        with open(filepath, 'r') as file:
+        with open(filepath, 'r', encoding='utf-8-sig') as file:
             # use csv.Sniffer() to try to detect the delimiter
             try:
                 dialect = csv.Sniffer().sniff(file.read(1024))
