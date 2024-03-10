@@ -44,7 +44,8 @@ class MainWindow(QMainWindow):
         # AND THEN append() YOUR ALGORITHMVIEW TO THE algorithmViews ARRAY
         # MAKE SURE THE INDEXING of both arrays match.
         self.algorithms = ["Heuristic Mining",
-                           "Fuzzy Miner"]
+                           "Fuzzy Miner",
+                           "Alpha Miner"]
         self.algorithmViews = []
 
         # The BottomOperationInterfaceWrapper adds a bottom layout with 2 buttons for mining/loading models.
