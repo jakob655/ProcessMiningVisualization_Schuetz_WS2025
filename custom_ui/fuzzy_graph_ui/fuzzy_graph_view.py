@@ -1,13 +1,15 @@
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QFileDialog, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame, QTextEdit, QToolBox, QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QFileDialog, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame, QTextEdit, QToolBox, \
+    QSpacerItem, QSizePolicy
 from api.custom_error import FileNotFoundException
 from custom_ui.fuzzy_graph_ui.fuzzy_graph_controller import FuzzyGraphController
 from custom_ui.algorithm_view_interface import AlgorithmViewInterface
 from custom_ui.d3_html_widget import HTMLWidget
 from custom_ui.custom_widgets import SaveProjectButton, ExportButton, CustomQSlider
 
+
 class FuzzyGraphView(QWidget, AlgorithmViewInterface):
-    def __init__(self, parent, saveFolder = "saves/", workingDirectory = 'temp/graph_viz'):
+    def __init__(self, parent, saveFolder="saves/", workingDirectory='temp/graph_viz'):
         super().__init__()
         self.parent = parent
         self.initialized = False
@@ -39,7 +41,8 @@ class FuzzyGraphView(QWidget, AlgorithmViewInterface):
         self.saveFolder = saveFolder
         # directory where graphviz file is stored for display and export
         self.workingDirectory = workingDirectory
-        self.FuzzyGraphController = FuzzyGraphController(workingDirectory, self.significance, self.edge_cutoff,self.utility_ratio)
+        self.FuzzyGraphController = FuzzyGraphController(workingDirectory, self.significance, self.edge_cutoff,
+                                                         self.utility_ratio)
 
         self.graphviz_graph = None
         self.graph_widget = HTMLWidget(parent)
@@ -122,11 +125,13 @@ class FuzzyGraphView(QWidget, AlgorithmViewInterface):
 
         self.graph_widget.start_server()
         self.initialized = True
-        self.__set_slider_values(self.default_significance, self.default_correlation, self.edge_cutoff, self.utility_ratio)
+        self.__set_slider_values(self.default_significance, self.default_correlation, self.edge_cutoff,
+                                 self.utility_ratio)
         # I have added a Qtimer, because while I was debuging the code it was trying to write the new value and redrawing
         # the new graph at the same time
         QTimer.singleShot(500, self.__redraw)
-        #self.__redraw()
+        # self.__redraw()
+
     def loadModel(self):
         try:
             file_path, _ = QFileDialog.getOpenFileName(None, "Select file", self.saveFolder, "Pickle files (*.pickle)")
@@ -153,9 +158,10 @@ class FuzzyGraphView(QWidget, AlgorithmViewInterface):
         self.graph_widget.start_server()
         self.initialized = True
         self.__redraw()
+
     def __sign_slider_changed(self, value):
-        self.sign_slider.setText(f"Sign.: {value/100:.2f}")
-        self.significance = value/100
+        self.sign_slider.setText(f"Sign.: {value / 100:.2f}")
+        self.significance = value / 100
 
         # it will try to update model, but model not existin yet
         if not self.initialized:
@@ -166,8 +172,8 @@ class FuzzyGraphView(QWidget, AlgorithmViewInterface):
         self.__redraw()
 
     def __corr_slider_changed(self, value):
-        self.corr_slider.setText(f"Corr.: {value/100:.2f}")
-        self.correlation = value/100
+        self.corr_slider.setText(f"Corr.: {value / 100:.2f}")
+        self.correlation = value / 100
 
         if not self.initialized:
             return
@@ -176,8 +182,8 @@ class FuzzyGraphView(QWidget, AlgorithmViewInterface):
         self.__redraw()
 
     def __edge_cutoff_slider_changed(self, value):
-        self.edge_cutoff_slider.setText(f"Cutoff: {value/100:.2f}")
-        self.edge_cutoff = value/100
+        self.edge_cutoff_slider.setText(f"Cutoff: {value / 100:.2f}")
+        self.edge_cutoff = value / 100
 
         if not self.initialized:
             return
@@ -194,13 +200,15 @@ class FuzzyGraphView(QWidget, AlgorithmViewInterface):
         self.__redraw()
 
     def __redraw(self):
-        self.graphviz_graph = self.FuzzyGraphController.mine_and_draw(self.significance, self.correlation, self.edge_cutoff, self.utility_ratio)
+        self.graphviz_graph = self.FuzzyGraphController.mine_and_draw(self.significance, self.correlation,
+                                                                      self.edge_cutoff, self.utility_ratio)
         filename = self.workingDirectory + '.dot'
         self.graph_widget.set_source(filename)
         try:
             self.graph_widget.reload()
         except FileNotFoundException as e:
             print(e.message)
+
     def __set_slider_values(self, sign, correlation, cutoff, utility):
         # set text
         self.sign_slider.setText(f"Significance: {sign:.2f}")
@@ -209,40 +217,45 @@ class FuzzyGraphView(QWidget, AlgorithmViewInterface):
         self.utility_slider.setText(f"Utility: {utility:.2f}")
 
         # set value
-        self.sign_slider.setValue(int(sign*100))
+        self.sign_slider.setValue(int(sign * 100))
         self.corr_slider.setValue(int(correlation * 100))
-        self.edge_cutoff_slider.setValue(int(cutoff*100))
+        self.edge_cutoff_slider.setValue(int(cutoff * 100))
         self.utility_slider.setValue(int(utility * 100))
+
     def getModel(self):
         return self.FuzzyGraphController.getModel()
+
     def __check_if_graph_exists(self):
         if not self.graphviz_graph:
             return False
         return True
+
     def generate_dot(self):
         if not self.__check_if_graph_exists():
             return
-        self.graphviz_graph.render(self.workingDirectory, format = 'dot')
+        self.graphviz_graph.render(self.workingDirectory, format='dot')
         print("fuzzy_graph_view: DOT generated")
         return
+
     def generate_svg(self):
         if not self.__check_if_graph_exists():
             return
-        self.graphviz_graph.render(self.workingDirectory, format = 'svg')
+        self.graphviz_graph.render(self.workingDirectory, format='svg')
         print("fuzzy_graph_view: SVG generated")
         return
+
     def generate_png(self):
         if not self.__check_if_graph_exists():
             return
-        self.graphviz_graph.render(self.workingDirectory, format = 'png')
+        self.graphviz_graph.render(self.workingDirectory, format='png')
         print("fuzzy_graph_view: PNG generated")
         return
 
     def clear(self):
         self.graph_widget.clear()
         # this values w
-        #self.default_significance = 0.7
-        #self.default_correlation = 0.5
-        #self.default_edge_cutoff = 0.5
-        #self.default_utility_ration = 0.5
+        # self.default_significance = 0.7
+        # self.default_correlation = 0.5
+        # self.default_edge_cutoff = 0.5
+        # self.default_utility_ration = 0.5
         self.zoom_factor = 1.0

@@ -4,6 +4,7 @@ import sys
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QLabel, QStyleFactory, QApplication, QMainWindow, QStackedWidget, QMessageBox, QFileDialog
 from api.custom_error import FileNotFoundException, UndefinedErrorException
+from custom_ui.alpha_graph_ui.alpha_graph_view import AlphaGraphView
 from custom_ui.column_selection_view import ColumnSelectionView
 from custom_ui.heuristic_graph_ui.heuristic_graph_view import HeuristicGraphView
 from custom_ui.fuzzy_graph_ui.fuzzy_graph_view import FuzzyGraphView
@@ -57,6 +58,11 @@ class MainWindow(QMainWindow):
         self.fuzzyGraphView = BottomOperationInterfaceWrapper(
             self, FuzzyGraphView(self, 'saves/1/'), self.algorithms)
         self.algorithmViews.append(self.fuzzyGraphView)
+
+        self.alphaGraphView = BottomOperationInterfaceWrapper(
+            self, AlphaGraphView(self, 'saves/2/'), self.algorithms)
+        self.algorithmViews.append(self.alphaGraphView)
+
 
         # Add a view widget for the default view
         self.startView = BottomOperationInterfaceWrapper(
