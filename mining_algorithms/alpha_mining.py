@@ -1,18 +1,25 @@
+import itertools
+
 from graphviz import Digraph
 import numpy as np
 from mining_algorithms.ddcal_clustering import DensityDistributionClusterAlgorithm
 
-class AlphaMining():
+
+class AlphaMining:
     def __init__(self, cases):
-        # convert it to set, since alpha miner doesn't care how many times a process was done
         self.cases = cases
-        self.start_nodes = self.get_start_nodes()
-        self.end_nodes = self.get_end_nodes()
+        self.start_events = self.get_start_events()
+        self.end_events = self.get_end_events()
         self.unique_events = self.get_unique_events()
+        self.direct_succession = self.direct_succession()
+        self.causality = self.causality(self.direct_succession)
+        self.parallel = self.parallel(self.direct_succession)
+        self.choice = self.choice(self.unique_events, self.causality, self.parallel)
         print("sad")
 
     # step 1
     # each activity in cases corresponds to a transition in sigma(cases)
+    # returns list converted to set to avoid duplicates
     def get_unique_events(self):
         unique_events = []
 
@@ -24,22 +31,83 @@ class AlphaMining():
 
     # step 2
     # the set of start activities - that is, the first element of each trace
-    def get_start_nodes(self):
-        start_nodes = []
+    # returns list converted to set to avoid duplicates
+    def get_start_events(self):
+        start_events = []
 
         for case in self.cases:
-            start_nodes.append(case[0])
+            start_events.append(case[0])
 
-        return set(start_nodes)
+        return set(start_events)
 
     # step 3
     # the set of end activities - that is, elements that appear last in trace
-    def get_end_nodes(self):
-        end_nodes = []
+    # returns list converted to set to avoid duplicates
+    def get_end_events(self):
+        end_events = []
 
         for case in self.cases:
-            end_nodes.append(case[len(case)-1])
+            end_events.append(case[len(case)-1])
 
-        return set(end_nodes)
+        return set(end_events)
+
+    # essential for alpha algorithm: finding direct succession, together with causality, parallel and choice
+    # noted with >, for example a > b, b > c, c > e in a process ['a', 'b', 'c', 'e']
+    # returns list converted to set to avoid duplicates
+    def direct_succession(self):
+
+        direct_succession = []
+        for case in self.cases:
+            for i in range(len(case) - 1):
+                x = case[i]
+                y = case[i + 1]
+                direct_succession.append((x, y))
+
+        return set(direct_succession)
+
+    # essential for alpha algorithm: finding causality, together with direct succession, parallel and choice
+    # noted with ->, for example a -> b, b -> c, but not b -> b in a process ['a', 'b', 'b', 'c']
+    # returns list converted to set to avoid duplicates
+    @staticmethod
+    def causality(direct_succession):
+
+        causality = []
+        for pair in direct_succession:
+            pair_reversed = (pair[1], pair[0])
+            if pair_reversed not in direct_succession:
+                pair_not_reversed = (pair[0], pair[1])
+                causality.append(pair_not_reversed)
+
+        return set(causality)
+
+    # essential for alpha algorithm: finding parallels, together with direct succession, causality and choice
+    # noted with ||, for example b || b in a process ['a', 'b', 'b', 'c']
+    # returns list converted to set to avoid duplicates
+    @staticmethod
+    def parallel(direct_succession):
+
+        parallel = []
+        for pair in direct_succession:
+            pair_reversed = (pair[1], pair[0])
+            if pair_reversed in direct_succession:
+                pair_not_reversed = (pair[0], pair[1])
+                parallel.append(pair_not_reversed)
+
+        return set(parallel)
+
+    # essential for alpha algorithm: finding choice, together with direct succession, causality and parallel
+    # noted with #, for example 'a # c', 'c # a' in a process ['a', 'b', 'b', 'c']
+    # returns list converted to set to avoid duplicates
+    @staticmethod
+    def choice(unique_events, causality, parallel):
+
+        choice = []
+        for event1 in unique_events:
+            for event2 in unique_events:
+                if (event1 != event2) and ((event1, event2) not in causality) and (
+                        (event2, event1) not in causality) and ((event1, event2) not in parallel):
+                    choice.append((event1, event2))
+
+        return set(choice)
 
 
