@@ -15,7 +15,12 @@ class AlphaMining:
         self.causality = self.causality(self.direct_succession)
         self.parallel = self.parallel(self.direct_succession)
         self.choice = self.choice(self.unique_events, self.causality, self.parallel)
-        print("sad")
+        self.footprint = self.footprint()
+        print(self.footprint)
+
+    # This implementation follows the steps outlined in the lecture by Professor Wil van der Aalst on process mining.
+    # The lecture video can be found at: https://www.youtube.com/watch?v=ATBEEEDxHTQ
+    # Credit for the algorithm and methodology goes to Professor Wil van der Aalst.
 
     # step 1
     # each activity in cases corresponds to a transition in sigma(cases)
@@ -50,6 +55,8 @@ class AlphaMining:
             end_events.append(case[len(case)-1])
 
         return set(end_events)
+
+    # ALPHA MINER ALGORITHM ESSENTIALS
 
     # essential for alpha algorithm: finding direct succession, together with causality, parallel and choice
     # noted with >, for example a > b, b > c, c > e in a process ['a', 'b', 'c', 'e']
@@ -109,5 +116,12 @@ class AlphaMining:
                     choice.append((event1, event2))
 
         return set(choice)
+
+    def footprint(self):
+        footprint = ["All transitions: {}".format(self.unique_events),
+                     "Direct succession: {}".format(self.direct_succession), "Causality: {}".format(self.causality),
+                     "Parallel: {}".format(self.parallel), "Choice: {}".format(self.choice)]
+        return '\n'.join(footprint)
+
 
 
