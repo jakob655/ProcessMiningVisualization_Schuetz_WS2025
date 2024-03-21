@@ -22,6 +22,9 @@ class AlphaMining:
     # The lecture video can be found at: https://www.youtube.com/watch?v=ATBEEEDxHTQ
     # Credit for the algorithm and methodology goes to Professor Wil van der Aalst.
 
+    ####################################################################################################################
+    # ALPHA MINER ALGORITHM IMPLEMENTATION BEGIN
+
     # step 1
     # each activity in cases corresponds to a transition in sigma(cases)
     # returns list converted to set to avoid duplicates
@@ -56,7 +59,26 @@ class AlphaMining:
 
         return set(end_events)
 
-    # ALPHA MINER ALGORITHM ESSENTIALS
+    # TODO - STEP 4 XL from lecture BPI 5 - Petri Nets & Alpha Algorithm - Professor Wil van der Aalst
+    # step 4
+    # Find pairs (A,B) of sets of activities such that every element a∈B and every element b∈B are causally related,
+    # (i.e., a->L b), all  elements in A are independent (a1#La2), and all elements in B are independent (b1#Lb2)
+
+    def generate_set_xl(self):
+        pass
+
+    # TODO - STEP 5 YL from lecture BPI 5 - Petri Nets & Alpha Algorithm - Professor Wil van der Aalst
+    # step 5
+    # Delete from set XL all pairs (A,B) that are not maximal
+
+    def generate_set_yl(self):
+        pass
+
+    # ALPHA MINER ALGORITHM IMPLEMENTATION END
+    ####################################################################################################################
+
+    ####################################################################################################################
+    # ALPHA MINER ALGORITHM ESSENTIALS BEGIN
 
     # essential for alpha algorithm: finding direct succession, together with causality, parallel and choice
     # noted with >, for example a > b, b > c, c > e in a process ['a', 'b', 'c', 'e']
@@ -123,5 +145,6 @@ class AlphaMining:
                      "Parallel: {}".format(self.parallel), "Choice: {}".format(self.choice)]
         return '\n'.join(footprint)
 
-
+    # ALPHA MINER ALGORITHM ESSENTIALS END
+    ####################################################################################################################
 
