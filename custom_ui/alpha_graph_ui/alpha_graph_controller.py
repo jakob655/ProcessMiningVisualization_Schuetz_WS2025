@@ -1,10 +1,26 @@
+from api.pickle_save import pickle_load
+from mining_algorithms.alpha_mining import AlphaMining
 
-class AlphaGraphController():
-    def __init__(self, workingDirectory, default_significance = 0.0, default_correlation = 0.5, default_edge_cutoff = 0.4, default_utility_ration = 0.5):
+
+class AlphaGraphController:
+    def __init__(self, workingDirectory):
         super().__init__()
         self.model = None
         self.workingDirectory = workingDirectory
-        self.significance = default_significance
-        self.edge_cutoff = default_edge_cutoff
-        self.utility_ration = default_utility_ration
-        self.correlation = default_correlation
+
+    def start_mining(self, cases):
+        self.model = AlphaMining(set(cases))
+        self.draw_graph()
+
+    def load_model(self, file_path):
+        self.model = pickle_load(file_path)
+        self.draw_graph()
+        return file_path
+
+    def draw_graph(self):
+        graph = self.model.draw_graph()
+        graph.render(self.workingDirectory, format='dot')
+        return graph
+
+    def get_model(self):
+        return self.model
