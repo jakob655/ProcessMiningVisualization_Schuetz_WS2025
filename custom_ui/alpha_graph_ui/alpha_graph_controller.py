@@ -9,17 +9,18 @@ class AlphaGraphController:
         self.workingDirectory = workingDirectory
 
     def start_mining(self, cases):
-        self.model = AlphaMining(cases)
-        self.mine_and_draw()
-        pass
+        self.model = AlphaMining(set(cases))
+        self.draw_graph()
 
     def load_model(self, file_path):
         self.model = pickle_load(file_path)
-        self.mine_and_draw()
+        self.draw_graph()
         return file_path
 
-    def mine_and_draw(self):
-        pass
+    def draw_graph(self):
+        graph = self.model.draw_graph()
+        graph.render(self.workingDirectory, format='dot')
+        return graph
 
     def get_model(self):
         return self.model

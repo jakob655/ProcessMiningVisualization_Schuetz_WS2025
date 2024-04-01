@@ -1,9 +1,9 @@
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QFileDialog
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QFileDialog, QFrame, QVBoxLayout, QLabel
 
 from api.custom_error import FileNotFoundException
 from custom_ui.algorithm_view_interface import AlgorithmViewInterface
 from custom_ui.alpha_graph_ui.alpha_graph_controller import AlphaGraphController
-from custom_ui.custom_widgets import SaveProjectButton
+from custom_ui.custom_widgets import SaveProjectButton, ExportButton
 from custom_ui.d3_html_widget import HTMLWidget
 
 
@@ -16,23 +16,33 @@ class AlphaGraphView(QWidget, AlgorithmViewInterface):
         self.initialized = False
         self.saveFolder = saveFolder
         self.workingDirectory = workingDirectory
-
-        self.AlphaGraphController = AlphaGraphController(self)
-        self.graph_widget = HTMLWidget(parent)
+        self.AlphaGraphController = AlphaGraphController(workingDirectory)
         self.graphviz_graph = None
-        self.saveProject_button = SaveProjectButton(self.parent, self.saveFolder, self.get_model)
-
-        # Create the main layout
+        self.graph_widget = HTMLWidget(parent)
+        slider_frame = QFrame()
+        slider_frame.setFrameShape(QFrame.StyledPanel)
+        slider_frame.setFrameShadow(QFrame.Sunken)
+        slider_frame.setMinimumWidth(200)
+        slider_layout = QHBoxLayout()
+        self.saveProject_button = SaveProjectButton(self.parent, self.saveFolder, self.get_model())
+        self.export_button = ExportButton(self.parent)
+        slider_frame_layout = QVBoxLayout()
+        slider_frame_layout.addWidget(QLabel())
+        slider_frame_layout.addLayout(slider_layout)
+        slider_frame_layout.addWidget(self.saveProject_button)
+        slider_frame_layout.addWidget(self.export_button)
+        slider_frame.setLayout(slider_frame_layout)
         main_layout = QHBoxLayout(self)
         main_layout.addWidget(self.graph_widget, stretch=3)
+        main_layout.addWidget(slider_frame, stretch=1)
+        self.setLayout(main_layout)
 
     def startMining(self, filename, cases):
         self.saveProject_button.load_filename(filename)
-        self.AlphaGraphController.start_mining(cases)
-
+        unique_cases = set(map(tuple, cases))
+        self.AlphaGraphController.start_mining(unique_cases)
         self.graph_widget.start_server()
         self.initialized = True
-        self.__mine_and_draw()
 
     def loadModel(self):
         try:
@@ -55,7 +65,7 @@ class AlphaGraphView(QWidget, AlgorithmViewInterface):
         self.__mine_and_draw()
 
     def __mine_and_draw(self):
-        self.graphviz_graph = self.AlphaGraphController.mine_and_draw()
+        self.graphviz_graph = self.AlphaGraphController.draw_graph()
 
         # Load the image
         filename = self.workingDirectory + '.dot'
@@ -70,7 +80,7 @@ class AlphaGraphView(QWidget, AlgorithmViewInterface):
 
     def __graph_exists(self):
         if not self.graphviz_graph:
-            return False
+            self.graphviz_graph = self.AlphaGraphController.draw_graph()
         return True
 
     def generate_dot(self):
