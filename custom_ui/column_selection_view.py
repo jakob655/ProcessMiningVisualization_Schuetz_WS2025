@@ -1,17 +1,19 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QTableWidget, QMessageBox, QTableWidgetItem, QWidget, QVBoxLayout
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QTableWidget, QMessageBox, QTableWidgetItem, QWidget, \
+    QVBoxLayout
 from PyQt5.QtGui import QColor
 from api.csv_preprocessor import read
 from api.custom_error import BadColumnException, UndefinedErrorException
 from custom_ui.custom_widgets import CustomQComboBox
 import csv
 
+
 class ColumnSelectionView(QWidget):
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
 
-        #global const variables
+        # global const variables
         self.eventColor = "#1E90FF"
         self.caseColor = "#00BFFF"
         self.timeColor = "#6495ED"
@@ -38,7 +40,7 @@ class ColumnSelectionView(QWidget):
         # set up column selector combo box
         self.column_selector = CustomQComboBox()
         self.column_selector.currentIndexChanged.connect(self.__column_selected)
-        
+
         # set up algorithm selector combo box
         self.algorithm_selector = CustomQComboBox()
         self.algorithm_selector.currentIndexChanged.connect(self.__algorithm_selected)
@@ -104,11 +106,11 @@ class ColumnSelectionView(QWidget):
             try:
                 dialect = csv.Sniffer().sniff(file.read(1024))
             except Exception as e:
-                raise UndefinedErrorException("ColumnSelectionView: "+str(e))
-            
+                raise UndefinedErrorException("ColumnSelectionView: " + str(e))
+
             # reset the file pointer to the beginning of the file
             file.seek(0)
-            
+
             # create a CSV reader using the detected dialect
             reader = csv.reader(file, dialect)
 
@@ -120,13 +122,13 @@ class ColumnSelectionView(QWidget):
                 self.table.insertRow(row_index)
                 for col_index, col_data in enumerate(row_data):
                     self.table.setItem(row_index, col_index, QTableWidgetItem(col_data))
-            
+
             # Default assignments
             self.timeLabel = self.table.horizontalHeaderItem(0).text()
             self.eventLabel = self.table.horizontalHeaderItem(1).text()
             self.caseLabel = self.table.horizontalHeaderItem(2).text()
             self.__color_headers()
-          
+
     # CALL BEFORE USAGE
     def load_algorithms(self, array):
         for element in array:
@@ -139,7 +141,7 @@ class ColumnSelectionView(QWidget):
     def __column_header_clicked(self, index):
         self.column_selector.setCurrentIndex(index)
         self.selected_column = index
-    
+
     def __column_selected(self, index):
         self.selected_column = index
 
@@ -160,7 +162,7 @@ class ColumnSelectionView(QWidget):
         self.eventIndex = self.selected_column
         self.__color_headers()
         print(self.eventLabel + " assigned as event column")
-    
+
     def __color_headers(self):
         for i in range(self.table.columnCount()):
             if self.timeIndex == i:
@@ -174,7 +176,8 @@ class ColumnSelectionView(QWidget):
 
     def __start_import(self):
         msgBox = QMessageBox()
-        msgBox.setText("Time label is "+self.timeLabel+"\n"+"Case label is "+self.caseLabel+"\n"+"Event label is "+self.eventLabel)
+        msgBox.setText(
+            "Time label is " + self.timeLabel + "\n" + "Case label is " + self.caseLabel + "\n" + "Event label is " + self.eventLabel)
         msgBox.setInformativeText("Are these columns correct?")
         msgBox.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
         msgBox.setDefaultButton(QMessageBox.Cancel)
@@ -182,19 +185,22 @@ class ColumnSelectionView(QWidget):
 
         if ret == QMessageBox.Cancel:
             return
-        
+
         try:
             cases = read(self.filePath, self.timeLabel, self.caseLabel, self.eventLabel)
         except BadColumnException as e:
             print(e.message)
-            return 
-        
+            return
+
         if not cases:
             print("ColumnSelectionView: ERROR Something went wrong when reading cases")
             return
-        
-        self.parent.mine_new_process(self.filePath, cases, self.selected_algorithm)
-    
+
+        try:
+            self.parent.mine_new_process(self.filePath, cases, self.selected_algorithm)
+        except Exception as e:
+            print(f"An error occurred during mine_new_process: {e}")
+
     def __return_to_start(self):
         self.parent.switch_to_start_view()
 
