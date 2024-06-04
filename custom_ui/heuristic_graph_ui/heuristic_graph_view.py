@@ -35,23 +35,23 @@ class HeuristicGraphView(QWidget, AlgorithmViewInterface):
         slider_frame = QFrame()
         slider_frame.setFrameShape(QFrame.StyledPanel)
         slider_frame.setFrameShadow(QFrame.Sunken)
+
         slider_frame.setMinimumWidth(200)
 
-        self.freq_slider = CustomQSlider(self.__freq_slider_changed, Qt.Vertical)
+        self.freq_slider = CustomQSlider(self.__freq_slider_changed, Qt.Horizontal)
         self.freq_slider.setRange(self.min_frequency, self.max_frequency)
         self.freq_slider.setValue(self.min_frequency)
 
-        self.thresh_slider = CustomQSlider(self.__thresh_slider_changed, Qt.Vertical)
+        self.thresh_slider = CustomQSlider(self.__thresh_slider_changed, Qt.Horizontal)
         self.thresh_slider.setRange(0, 100)
         self.thresh_slider.setValue(50)
 
-        self.spm_thresh_slider = CustomQSlider(self.__spm_thresh_slider_changed, Qt.Vertical)
+        self.spm_thresh_slider = CustomQSlider(self.__spm_thresh_slider_changed, Qt.Horizontal)
         self.spm_thresh_slider.setRange(0, 100)
         self.spm_thresh_slider.setValue(50)
 
-        slider_layout = QHBoxLayout()
+        slider_layout = QVBoxLayout()
         slider_layout.addWidget(self.freq_slider)
-        slider_layout.addWidget(self.thresh_slider)
         slider_layout.addWidget(self.thresh_slider)
         slider_layout.addWidget(self.spm_thresh_slider)
 
