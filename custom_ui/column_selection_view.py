@@ -199,10 +199,20 @@ class ColumnSelectionView(QWidget):
         try:
             self.parent.mine_new_process(self.filePath, cases, self.selected_algorithm)
         except Exception as e:
+            self.__return_to_start()
+            self.__show_error_message(f"An error occurred during process mining: {e}")
             print(f"An error occurred during mine_new_process: {e}")
 
     def __return_to_start(self):
         self.parent.switch_to_start_view()
+
+    def __show_error_message(self, message):
+        error_msg_box = QMessageBox()
+        error_msg_box.setIcon(QMessageBox.Critical)
+        error_msg_box.setText("Error")
+        error_msg_box.setInformativeText(message + "\nTry again with another dataset")
+        error_msg_box.setStandardButtons(QMessageBox.Ok)
+        error_msg_box.exec_()
 
     def clear(self):
         self.timeLabel = "timestamp"
