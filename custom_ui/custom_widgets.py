@@ -1,6 +1,6 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QFileDialog, QSlider, QLabel, QVBoxLayout, QGraphicsView, QGraphicsScene, \
-    QComboBox, QPushButton, QHBoxLayout, QVBoxLayout, QLineEdit
+    QComboBox, QPushButton, QHBoxLayout, QVBoxLayout, QLineEdit, QDialog, QMessageBox
 from PyQt5.QtGui import QPixmap, QPainter, QTransform, QIntValidator
 import os
 from api.pickle_save import pickle_save
@@ -68,6 +68,32 @@ class CustomQComboBox(QComboBox):
         self.setFixedSize(150, 20)
 
 
+class DelimiterSelectionDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Select Delimiter")
+        self.delimiter = None
+
+        self.layout = QVBoxLayout()
+
+        self.label = QLabel("Select a delimiter:")
+        self.layout.addWidget(self.label)
+
+        self.combo_box = QComboBox()
+        self.combo_box.addItems([",", ";", ":", "|", " "])
+        self.layout.addWidget(self.combo_box)
+
+        self.button = QPushButton("OK")
+        self.button.clicked.connect(self.set_delimiter)
+        self.layout.addWidget(self.button)
+
+        self.setLayout(self.layout)
+
+    def set_delimiter(self):
+        self.delimiter = self.combo_box.currentText()
+        self.accept()
+
+
 class BottomOperationInterfaceLayoutWidget(QWidget):
     def __init__(self, parent):
         super().__init__()
@@ -113,7 +139,12 @@ class BottomOperationInterfaceLayoutWidget(QWidget):
         self.parent.mine_existing_process(self.selected_algorithm)
 
     def mine_new_process(self):
-        self.parent.switch_to_column_selection_view()
+        dialog = DelimiterSelectionDialog()
+        if dialog.exec_() == QDialog.Accepted:
+            delimiter = dialog.delimiter
+            self.parent.switch_to_column_selection_view(delimiter)
+        else:
+            QMessageBox.information(self, "Info", "Delimiter selection was cancelled")
 
     def __algorithm_selected(self, index):
         self.algorithm_selector.setCurrentIndex(index)

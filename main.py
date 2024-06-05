@@ -108,7 +108,7 @@ class MainWindow(QMainWindow):
             action.setEnabled(self.img_generated)
 
     # gets called by start_view.py 'create new process' button
-    def switch_to_column_selection_view(self):
+    def switch_to_column_selection_view(self, delimiter):
 
         # Open a file dialog to allow users to select a CSV file
         filename, _ = QFileDialog.getOpenFileName(
@@ -121,7 +121,7 @@ class MainWindow(QMainWindow):
         # Change to Column Selection View
         self.__reset_canvas()
         try:
-            self.columnSelectionView.load_csv(filename)
+            self.columnSelectionView.load_csv(filename, delimiter)
         except UndefinedErrorException as e:
             print(e)
             self.show_pop_up_message(str(e))

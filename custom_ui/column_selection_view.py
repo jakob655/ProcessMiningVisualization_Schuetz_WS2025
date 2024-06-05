@@ -6,12 +6,14 @@ from api.csv_preprocessor import read
 from api.custom_error import BadColumnException, UndefinedErrorException
 from custom_ui.custom_widgets import CustomQComboBox
 import csv
+import pandas as pd
 
 
 class ColumnSelectionView(QWidget):
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
+        self.delimiter = None
 
         # global const variables
         self.eventColor = "#1E90FF"
@@ -99,35 +101,39 @@ class ColumnSelectionView(QWidget):
         main_layout.setContentsMargins(10, 10, 10, 10)
 
     # CALL BEFORE USAGE
-    def load_csv(self, filepath):
+    def load_csv(self, filepath, delimiter):
         self.filePath = filepath
-        with open(filepath, 'r', encoding='utf-8-sig') as file:
-            # use csv.Sniffer() to try to detect the delimiter
-            try:
-                dialect = csv.Sniffer().sniff(file.read(1024))
-            except Exception as e:
-                raise UndefinedErrorException("ColumnSelectionView: " + str(e))
+        self.delimiter = delimiter
+        df = None
 
-            # reset the file pointer to the beginning of the file
-            file.seek(0)
+        try:
+            df = pd.read_csv(filepath, delimiter=self.delimiter, encoding='utf-8-sig')
+        except Exception as e:
+            self.__show_error_message(f"An error occurred during import: {e}")
+            print(f"An error occurred during mine_new_process: {e}")
 
-            # create a CSV reader using the detected dialect
-            reader = csv.reader(file, dialect)
+        if df is None:
+            raise UndefinedErrorException("ColumnSelectionView: Could not determine delimiter")
 
-            headers = next(reader)
-            self.table.setColumnCount(len(headers))
-            self.table.setHorizontalHeaderLabels(headers)
-            self.column_selector.addItems(headers)
-            for row_index, row_data in enumerate(reader):
-                self.table.insertRow(row_index)
-                for col_index, col_data in enumerate(row_data):
-                    self.table.setItem(row_index, col_index, QTableWidgetItem(col_data))
+        # Populate the QTableWidget with data from the pandas DataFrame
+        headers = df.columns.tolist()
+        self.table.setColumnCount(len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+        self.column_selector.addItems(headers)
 
-            # Default assignments
+        for row_index, row_data in df.iterrows():
+            self.table.insertRow(row_index)
+            for col_index, col_data in enumerate(row_data):
+                self.table.setItem(row_index, col_index, QTableWidgetItem(str(col_data)))
+
+        # Default assignments
+        try:
             self.timeLabel = self.table.horizontalHeaderItem(0).text()
             self.eventLabel = self.table.horizontalHeaderItem(1).text()
             self.caseLabel = self.table.horizontalHeaderItem(2).text()
             self.__color_headers()
+        except Exception as e:
+            raise UndefinedErrorException("DelimiterSelectionError: Potential wrong delimiter, try again")
 
     # CALL BEFORE USAGE
     def load_algorithms(self, array):
