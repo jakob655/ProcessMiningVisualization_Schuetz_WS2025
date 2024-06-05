@@ -19,6 +19,10 @@ def calculate_spm(node, events, appearance_frequency, A, L, succession_matrix):
     return spm
 
 
+def handle_error(param):
+    print(param)
+
+
 class HeuristicMining:
     def __init__(self, log):
         self.log = log
@@ -48,15 +52,6 @@ class HeuristicMining:
         freq_labels_sorted = list(cluster.labels_sorted_data)
         events_copy = copy.deepcopy(self.events)
 
-        # add nodes to graph
-        for node in events_copy:
-            node_freq = self.appearance_frequency.get(node)
-            w = freq_labels_sorted[freq_sorted.index(node_freq)] / 2 + self.min_node_size
-            h = w / 3
-            # graph.node(str(node), label = str(node)+"\n"+str(node_freq),width = str(w), height = str(h))
-            graph.node(str(node), label=str(node) + "\n" + str(node_freq), width=str(w), height=str(h), shape="box",
-                       style="rounded")
-
         # cluster the edge thickness sizes based on frequency
         edge_frequencies = self.dependency_matrix.flatten()
         edge_frequencies = edge_frequencies[edge_frequencies >= 0.0]
@@ -74,6 +69,23 @@ class HeuristicMining:
             if spm < self.spm_threshold:
                 events_copy.remove(node)
 
+                # add nodes to graph
+        for node in events_copy:
+            node_freq = self.appearance_frequency.get(node)
+            try:
+                # Check if node_freq is in freq_sorted
+                if node_freq not in freq_sorted:
+                    raise ValueError(f"{node_freq} not found in freq_sorted")
+
+                w = freq_labels_sorted[freq_sorted.index(node_freq)] / 2 + self.min_node_size
+                h = w / 3
+                graph.node(str(node), label=str(node) + "\n" + str(node_freq), width=str(w), height=str(h), shape="box",
+                            style="rounded")
+            except ValueError as e:
+                print(f"ValueError: {e} - Node frequency {node_freq} not found in freq_sorted")
+                handle_error(f"An error occurred while processing node frequencies. Node frequency {node_freq} not found.")
+                continue  # Skip the current node and continue with the next one
+
         # add edges to graph
         for i in range(len(events_copy)):
             for j in range(len(events_copy)):
@@ -87,17 +99,28 @@ class HeuristicMining:
                     graph.edge(str(events_copy[i]), str(events_copy[j]), penwidth=str(edge_thickness),
                                label=str(int(self.succession_matrix[i][j])))
 
+        # filter log
+        arg = self.log
+        filtered_log = self.__filter_log(self.log, events_copy)
         # add start node
         graph.node("start", label="start", shape='doublecircle', style='filled', fillcolor='green')
-        for node in self.__get_start_nodes():
+        for node in self.__get_start_nodes(filtered_log):
             graph.edge("start", str(node), penwidth=str(0.1))
 
         # add end node
         graph.node("end", label="end", shape='doublecircle', style='filled', fillcolor='red')
-        for node in self.__get_end_nodes():
+        for node in self.__get_end_nodes(filtered_log):
             graph.edge(str(node), "end", penwidth=str(0.1))
 
         return graph
+
+    def __filter_log(self, log, events_copy):
+        filtered_log = []
+        for case in log:
+            filtered_case = [event for event in case if event in events_copy]
+            if filtered_case:  # Add only non-empty cases
+                filtered_log.append(filtered_case)
+        return filtered_log
 
     def calculate_A_and_L(self):
         activities = set()
@@ -147,19 +170,19 @@ class HeuristicMining:
                 index_x += 1
         return succession_matrix
 
-    def __get_start_nodes(self):
+    def __get_start_nodes(self, filtered_log):
         # a start node is a node where an entire column in the succession_matrix is 0.
         start_nodes = []
-        for case in self.log:
+        for case in filtered_log:
             if case[0] not in start_nodes:
                 start_nodes.append(case[0])
 
         return start_nodes
 
-    def __get_end_nodes(self):
+    def __get_end_nodes(self, filtered_log):
         # an end node is a node where an entire row in the succession_matrix is 0.
         end_nodes = []
-        for case in self.log:
+        for case in filtered_log:
             last_index = len(case) - 1
             if case[last_index] not in end_nodes:
                 end_nodes.append(case[last_index])
