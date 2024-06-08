@@ -75,19 +75,11 @@ class HeuristicMining():
 
         # add edges to graph
         for i in range(len(filtered_nodes)):
-            a = 0.0
-            b = 0.0
+            column_total = 0.0
+            row_total = 0.0
             for j in range(len(filtered_nodes)):
-                maus = len(filtered_nodes) - 1
-                s = self.succession_matrix[i][j]
-                a = a + dependency_graph[i][j]
-                b = b + dependency_graph[j][i]
-                no1 = filtered_nodes[i]
-                no2 = filtered_nodes[j]
-                mo = dependency_graph[i]
-                no = dependency_graph[j]
-                moni = dependency_graph[i][j]
-                mono = dependency_graph[j][i]
+                column_total = column_total + dependency_graph[i][j]
+                row_total = row_total + dependency_graph[j][i]
                 if dependency_graph[i][j] == 1.:
                     if dependency_threshold == 0:
                         edge_thickness = 0.1
@@ -98,9 +90,9 @@ class HeuristicMining():
                     graph.edge(str(filtered_nodes[i]), str(filtered_nodes[j]), penwidth=str(edge_thickness),
                                label=str(int(self.succession_matrix[i][j])))
 
-                if j == len(filtered_nodes) - 1 and a == 0 and filtered_nodes[i] not in end_nodes:
+                if j == len(filtered_nodes) - 1 and column_total == 0 and filtered_nodes[i] not in end_nodes:
                     end_nodes.append(filtered_nodes[i])
-                if j == len(filtered_nodes) - 1 and b == 0 and filtered_nodes[i] not in start_nodes:
+                if j == len(filtered_nodes) - 1 and row_total == 0 and filtered_nodes[i] not in start_nodes:
                     start_nodes.append(filtered_nodes[i])
 
         # add start node
