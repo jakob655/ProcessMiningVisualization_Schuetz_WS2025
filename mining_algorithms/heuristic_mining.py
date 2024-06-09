@@ -1,5 +1,3 @@
-import copy
-
 from graphviz import Digraph
 import numpy as np
 from mining_algorithms.ddcal_clustering import DensityDistributionClusterAlgorithm
@@ -12,21 +10,17 @@ def calculate_degree(node, events, succession_matrix):
     return in_degree + out_degree
 
 
-def calculate_spm(node, events, appearance_frequency, A, L, succession_matrix):
+def calculate_spm(node, events, node_frequency, A, L, succession_matrix):
     degree = calculate_degree(node, events, succession_matrix)
-    frequency = appearance_frequency
+    frequency = node_frequency
     spm = 1 - ((degree * A) / (frequency * L))
     return spm
 
 
-def handle_error(param):
-    print(param)
-
-
-class HeuristicMining:
+class HeuristicMining():
     def __init__(self, log):
         self.log = log
-        self.events, self.appearance_frequency = self.__filter_out_all_events()
+        self.events, self.appearence_frequency = self.__filter_out_all_events()
         self.succession_matrix = self.__create_succession_matrix()
         self.dependency_matrix = self.__create_dependency_matrix()
 
@@ -40,17 +34,35 @@ class HeuristicMining:
 
     def create_dependency_graph_with_graphviz(self, dependency_threshold, spm_threshold, min_frequency):
         dependency_graph = self.__create_dependency_graph(dependency_threshold, min_frequency)
+        start_nodes = self.__get_start_nodes()
+        end_nodes = self.__get_end_nodes()
         self.dependency_threshold = dependency_threshold
-        self.spm_threshold = spm_threshold
         self.min_frequency = min_frequency
+        self.spm_threshold = spm_threshold
 
         # create graph
         graph = Digraph()
         # cluster the node sizes based on frequency
-        cluster = DensityDistributionClusterAlgorithm(list(self.appearance_frequency.values()))
+        cluster = DensityDistributionClusterAlgorithm(list(self.appearence_frequency.values()))
         freq_sorted = list(cluster.sorted_data)
         freq_labels_sorted = list(cluster.labels_sorted_data)
-        events_copy = copy.deepcopy(self.events)
+
+        _A, _L = self.calculate_A_and_L()
+
+        filtered_nodes = []
+        for node in self.events:
+            node_freq = self.appearence_frequency.get(node)
+            spm = calculate_spm(node, self.events, node_freq, _A, _L, self.succession_matrix)
+            if spm >= spm_threshold:
+                filtered_nodes.append(node)
+
+        # add nodes to graph
+        for node in filtered_nodes:
+            node_freq = self.appearence_frequency.get(node)
+            w = freq_labels_sorted[freq_sorted.index(node_freq)] / 2 + self.min_node_size
+            h = w / 3
+            graph.node(str(node), label=str(node) + "\n" + str(node_freq), width=str(w), height=str(h), shape="box",
+                       style="filled")
 
         # cluster the edge thickness sizes based on frequency
         edge_frequencies = self.dependency_matrix.flatten()
@@ -61,34 +73,13 @@ class HeuristicMining:
         freq_sorted = list(cluster.sorted_data)
         freq_labels_sorted = list(cluster.labels_sorted_data)
 
-        # calculate spm for each node give the spm threshold and remove from events accordingly
-        _A, _L = self.calculate_A_and_L()
-        for node in events_copy:
-            node_freq = self.appearance_frequency.get(node)
-            spm = calculate_spm(node, events_copy, node_freq, _A, _L, self.succession_matrix)
-            if spm < self.spm_threshold:
-                events_copy.remove(node)
-
-                # add nodes to graph
-        for node in events_copy:
-            node_freq = self.appearance_frequency.get(node)
-            try:
-                # Check if node_freq is in freq_sorted
-                if node_freq not in freq_sorted:
-                    raise ValueError(f"{node_freq} not found in freq_sorted")
-
-                w = freq_labels_sorted[freq_sorted.index(node_freq)] / 2 + self.min_node_size
-                h = w / 3
-                graph.node(str(node), label=str(node) + "\n" + str(node_freq), width=str(w), height=str(h), shape="box",
-                            style="rounded")
-            except ValueError as e:
-                print(f"ValueError: {e} - Node frequency {node_freq} not found in freq_sorted")
-                handle_error(f"An error occurred while processing node frequencies. Node frequency {node_freq} not found.")
-                continue  # Skip the current node and continue with the next one
-
         # add edges to graph
-        for i in range(len(events_copy)):
-            for j in range(len(events_copy)):
+        for i in range(len(filtered_nodes)):
+            column_total = 0.0
+            row_total = 0.0
+            for j in range(len(filtered_nodes)):
+                column_total = column_total + dependency_graph[i][j]
+                row_total = row_total + dependency_graph[j][i]
                 if dependency_graph[i][j] == 1.:
                     if dependency_threshold == 0:
                         edge_thickness = 0.1
@@ -96,30 +87,38 @@ class HeuristicMining:
                         edge_thickness = freq_labels_sorted[
                                              freq_sorted.index(self.dependency_matrix[i][j])] + self.min_edge_thickness
 
-                    graph.edge(str(events_copy[i]), str(events_copy[j]), penwidth=str(edge_thickness),
+                    graph.edge(str(filtered_nodes[i]), str(filtered_nodes[j]), penwidth=str(edge_thickness),
                                label=str(int(self.succession_matrix[i][j])))
 
-        # filter log
-        arg = self.log
-        filtered_log = self.__filter_log(self.log, events_copy)
+                if j == len(filtered_nodes) - 1 and column_total == 0 and filtered_nodes[i] not in end_nodes:
+                    end_nodes.append(filtered_nodes[i])
+                if j == len(filtered_nodes) - 1 and row_total == 0 and filtered_nodes[i] not in start_nodes:
+                    start_nodes.append(filtered_nodes[i])
+
         # add start node
         graph.node("start", label="start", shape='doublecircle', style='filled', fillcolor='green')
-        for node in self.__get_start_nodes(filtered_log):
-            graph.edge("start", str(node), penwidth=str(0.1))
+
+        for node in start_nodes:
+            if node in filtered_nodes:
+                node_freq = self.appearence_frequency.get(node)
+                graph.node(str(node), label=str(node) + "\n" + str(node_freq), shape="box", style="filled")
+                graph.edge("start", str(node), penwidth=str(0.1))
 
         # add end node
         graph.node("end", label="end", shape='doublecircle', style='filled', fillcolor='red')
-        for node in self.__get_end_nodes(filtered_log):
-            graph.edge(str(node), "end", penwidth=str(0.1))
+        for node in end_nodes:
+            if node in filtered_nodes:
+                node_freq = self.appearence_frequency.get(node)
+                graph.node(str(node), label=str(node) + "\n" + str(node_freq), shape="box", style="filled")
+                graph.edge(str(node), "end", penwidth=str(0.1))
 
         return graph
 
-    def __filter_log(self, log, events_copy):
+    def filter_log(self, filtered_nodes):
         filtered_log = []
-        for case in log:
-            filtered_case = [event for event in case if event in events_copy]
-            if filtered_case:  # Add only non-empty cases
-                filtered_log.append(filtered_case)
+        for trace in self.log:
+            filtered_trace = [event for event in trace if event in filtered_nodes]
+            filtered_log.append(filtered_trace)
         return filtered_log
 
     def calculate_A_and_L(self):
@@ -132,7 +131,7 @@ class HeuristicMining:
 
     def get_max_frequency(self):
         max_freq = 0
-        for value in list(self.appearance_frequency.values()):
+        for value in list(self.appearence_frequency.values()):
             if value > max_freq:
                 max_freq = value
         return max_freq
@@ -170,19 +169,19 @@ class HeuristicMining:
                 index_x += 1
         return succession_matrix
 
-    def __get_start_nodes(self, filtered_log):
+    def __get_start_nodes(self):
         # a start node is a node where an entire column in the succession_matrix is 0.
         start_nodes = []
-        for case in filtered_log:
+        for case in self.log:
             if case[0] not in start_nodes:
                 start_nodes.append(case[0])
 
         return start_nodes
 
-    def __get_end_nodes(self, filtered_log):
+    def __get_end_nodes(self):
         # an end node is a node where an entire row in the succession_matrix is 0.
         end_nodes = []
-        for case in filtered_log:
+        for case in self.log:
             last_index = len(case) - 1
             if case[last_index] not in end_nodes:
                 end_nodes.append(case[last_index])
@@ -209,8 +208,8 @@ class HeuristicMining:
         y = 0
         for row in dependency_graph:
             for x in range(len(row)):
-                if self.dependency_matrix[y][x] >= dependency_threshold and self.succession_matrix[y][
-                    x] >= min_frequency:
+                if (self.dependency_matrix[y][x] >= dependency_threshold and
+                        self.succession_matrix[y][x] >= min_frequency):
                     dependency_graph[y][x] += 1
             y += 1
 
