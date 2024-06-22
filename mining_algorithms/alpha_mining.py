@@ -115,41 +115,41 @@ class AlphaMining:
         graph = Digraph()
 
         # Add the start node
-        graph.node("start", label="start", shape='doublecircle', style='filled', fillcolor='black')
+        graph.node("start", label="start", shape='doublecircle', style='filled', fillcolor='green')
 
         # Add the end node
-        graph.node("end", label="end", shape='circle', style='filled', fillcolor='white')
+        graph.node("end", label="end", shape='doublecircle', style='filled', fillcolor='red')
 
         # Add empty circle node
-        graph.node("empty_circle_start", label="", shape='circle', style='filled', fillcolor='white')
-        graph.node("empty_circle_end", label="", shape='circle', style='filled', fillcolor='white')
+        graph.node("empty_circle_start", label="", shape='circle', style="filled", fillcolor='#FDFFF5')
+        graph.node("empty_circle_end", label="", shape='circle', style="filled", fillcolor='#FDFFF5')
 
         for node in self.events_to_draw:
-            graph.node(str(node), label=str(node) + "\n", shape="box")
+            graph.node(str(node), label=str(node) + "\n", shape="box", style="filled", fillcolor='#FDFFF5')
 
         # Connect the start node to the empty circle for start nodes
-        graph.edge("start", "empty_circle_start", penwidth=str(0.1))
+        graph.edge("start", "empty_circle_start", penwidth=str(0.1), style="filled", fillcolor='#FDFFF5')
 
         for _set in self.yl_set:
             if len(_set) == 2:
                 if len(_set[0]) == 1 and len(_set[1]) == 1:
-                    graph.node(str(_set[0]) + str(_set[1]), label="", shape='circle', style='filled', fillcolor='white')
+                    graph.node(str(_set[0]) + str(_set[1]), label="", shape='circle', style="filled", fillcolor='#FDFFF5')
                     graph.edge(str(_set[0][0]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
                     graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][0]), penwidth=str(0.1))
                 elif len(_set[0]) == 1 and len(_set[1]) == 2:
                     # XOR-split
                     if self.__is_set_in_choice(_set[1], self.choice):
                         graph.node(str(_set[0]) + str(_set[1]), label="", shape='circle', style='filled',
-                                   fillcolor='white')
+                                   fillcolor='#FDFFF5')
                         graph.edge(str(_set[0][0]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
                         graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][0]), penwidth=str(0.1))
                         graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][1]), penwidth=str(0.1))
                     # AND-split
                     elif self.__is_set_in_parallel(_set[1], self.parallel):
                         graph.node(str(_set[0]) + str(_set[1]), label="", shape='circle', style='filled',
-                                   fillcolor='white')
+                                   fillcolor='#FDFFF5')
                         graph.node(str(_set[1]) + str(_set[0]), label="", shape='circle', style='filled',
-                                   fillcolor='white')
+                                   fillcolor='#FDFFF5')
                         graph.edge(str(_set[0][0]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
                         graph.edge(str(_set[0][0]), str(_set[1]) + str(_set[0]), penwidth=str(0.1))
                         graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][0]), penwidth=str(0.1))
@@ -159,16 +159,16 @@ class AlphaMining:
                     # XOR-join
                     if self.__is_set_in_choice(_set[0], self.choice):
                         graph.node(str(_set[0]) + str(_set[1]), label="", shape='circle', style='filled',
-                                   fillcolor='white')
+                                   fillcolor='#FDFFF5')
                         graph.edge(str(_set[0][0]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
                         graph.edge(str(_set[0][1]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
                         graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][0]), penwidth=str(0.1))
                     # AND-join
                     elif self.__is_set_in_parallel(_set[0], self.parallel):
                         graph.node(str(_set[0]) + str(_set[1]), label="", shape='circle', style='filled',
-                                   fillcolor='white')
+                                   fillcolor='#FDFFF5')
                         graph.node(str(_set[1]) + str(_set[0]), label="", shape='circle', style='filled',
-                                   fillcolor='white')
+                                   fillcolor='#FDFFF5')
                         graph.edge(str(_set[0][0]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
                         graph.edge(str(_set[0][1]), str(_set[1]) + str(_set[0]), penwidth=str(0.1))
                         graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][0]), penwidth=str(0.1))

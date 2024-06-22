@@ -61,8 +61,8 @@ class HeuristicMining():
             node_freq = self.appearence_frequency.get(node)
             w = freq_labels_sorted[freq_sorted.index(node_freq)] / 2 + self.min_node_size
             h = w / 3
-            graph.node(str(node), label=str(node) + "\n" + str(node_freq), width=str(w), height=str(h), shape="box",
-                       style="filled")
+            graph.node(str(node), label=f"<{node}<BR/><font color='red'>{node_freq}</font>>", width=str(w), height=str(h), shape="box",
+                       style="filled", fillcolor='#FDFFF5')
 
         # cluster the edge thickness sizes based on frequency
         edge_frequencies = self.dependency_matrix.flatten()
@@ -97,11 +97,10 @@ class HeuristicMining():
 
         # add start node
         graph.node("start", label="start", shape='doublecircle', style='filled', fillcolor='green')
-
         for node in start_nodes:
             if node in filtered_nodes:
                 node_freq = self.appearence_frequency.get(node)
-                graph.node(str(node), label=str(node) + "\n" + str(node_freq), shape="box", style="filled")
+                graph.node(str(node), label=f"<{node}<BR/><font color='red'>{node_freq}</font>>", shape="box", style="filled", fillcolor='#FDFFF5')
                 graph.edge("start", str(node), penwidth=str(0.1))
 
         # add end node
@@ -109,7 +108,7 @@ class HeuristicMining():
         for node in end_nodes:
             if node in filtered_nodes:
                 node_freq = self.appearence_frequency.get(node)
-                graph.node(str(node), label=str(node) + "\n" + str(node_freq), shape="box", style="filled")
+                graph.node(str(node), label=f"<{node}<BR/><font color='red'>{node_freq}</font>>", shape="box", style="filled", fillcolor='#FDFFF5')
                 graph.edge(str(node), "end", penwidth=str(0.1))
 
         return graph
