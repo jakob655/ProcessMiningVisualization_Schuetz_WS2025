@@ -106,34 +106,65 @@ class ColumnSelectionView(QWidget):
         self.delimiter = delimiter
         df = None
 
+        # Try loading with the provided delimiter
         try:
             df = pd.read_csv(filepath, delimiter=self.delimiter, encoding='utf-8-sig')
-        except Exception as e:
-            self.__show_error_message(f"An error occurred during import: {e}")
-            print(f"An error occurred during mine_new_process: {e}")
+            # Populate the QTableWidget with data from the pandas DataFrame
+            headers = df.columns.tolist()
+            self.table.setColumnCount(len(headers))
+            self.table.setHorizontalHeaderLabels(headers)
+            self.column_selector.addItems(headers)
 
-        if df is None:
-            raise UndefinedErrorException("ColumnSelectionView: Could not determine delimiter")
+            for row_index, row_data in df.iterrows():
+                self.table.insertRow(row_index)
+                for col_index, col_data in enumerate(row_data):
+                    self.table.setItem(row_index, col_index, QTableWidgetItem(str(col_data)))
 
-        # Populate the QTableWidget with data from the pandas DataFrame
-        headers = df.columns.tolist()
-        self.table.setColumnCount(len(headers))
-        self.table.setHorizontalHeaderLabels(headers)
-        self.column_selector.addItems(headers)
-
-        for row_index, row_data in df.iterrows():
-            self.table.insertRow(row_index)
-            for col_index, col_data in enumerate(row_data):
-                self.table.setItem(row_index, col_index, QTableWidgetItem(str(col_data)))
-
-        # Default assignments
-        try:
             self.timeLabel = self.table.horizontalHeaderItem(0).text()
             self.eventLabel = self.table.horizontalHeaderItem(1).text()
             self.caseLabel = self.table.horizontalHeaderItem(2).text()
             self.__color_headers()
+
         except Exception as e:
-            raise UndefinedErrorException("DelimiterSelectionError: Potential wrong delimiter, try again")
+            df = None
+            print(f"An error occurred when loading the csv with the provided delimiter: {e}")
+
+        # If loading with the provided delimiter fails, try with automatic delimiter detection
+        if df is None:
+            try:
+                with open(filepath, 'r', encoding='utf-8-sig') as file:
+                    try:
+                        dialect = csv.Sniffer().sniff(file.read(1024))
+                    except Exception as e:
+                        raise UndefinedErrorException("ColumnSelectionView: " + str(e))
+
+                    file.seek(0)
+
+                    df = pd.read_csv(file, delimiter=dialect.delimiter)
+
+                    self.table.setColumnCount(0)
+                    self.table.setRowCount(0)
+
+                    headers = df.columns.tolist()
+                    self.table.setColumnCount(len(headers))
+                    self.table.setHorizontalHeaderLabels(headers)
+                    self.column_selector.addItems(headers)
+
+                    for row_index, row_data in df.iterrows():
+                        self.table.insertRow(row_index)
+                        for col_index, col_data in enumerate(row_data):
+                            self.table.setItem(row_index, col_index, QTableWidgetItem(str(col_data)))
+
+                    self.timeLabel = self.table.horizontalHeaderItem(0).text()
+                    self.eventLabel = self.table.horizontalHeaderItem(1).text()
+                    self.caseLabel = self.table.horizontalHeaderItem(2).text()
+                    self.__color_headers()
+            except Exception as e:
+                df = None
+                print(f"An error occurred during automatic delimiter detection: {e}")
+
+        if df is None:
+            raise UndefinedErrorException("ColumnSelectionView: Could not determine delimiter")
 
     # CALL BEFORE USAGE
     def load_algorithms(self, array):
