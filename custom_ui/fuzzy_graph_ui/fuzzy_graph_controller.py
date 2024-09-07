@@ -1,8 +1,10 @@
 from mining_algorithms.fuzzy_mining import FuzzyMining
 from api.pickle_save import pickle_load
 
+
 class FuzzyGraphController():
-    def __init__(self, workingDirectory, default_significance = 0.0, default_correlation = 0.5, default_edge_cutoff = 0.4, default_utility_ration = 0.5):
+    def __init__(self, workingDirectory, default_significance=0.0, default_correlation=0.5, default_edge_cutoff=0.4,
+                 default_utility_ration=0.5):
         super().__init__()
         self.model = None
         self.workingDirectory = workingDirectory
@@ -16,13 +18,16 @@ class FuzzyGraphController():
         self.mine_and_draw(self.significance, self.correlation, self.edge_cutoff, self.utility_ration)
 
     def mine_and_draw(self, significance, correlation, edge_cutoff, utility_ration):
-        graph = self.model.create_graph_with_graphviz(float(significance), float(correlation), float(edge_cutoff), float(utility_ration))
+        graph = self.model.create_graph_with_graphviz(float(significance), float(correlation), float(edge_cutoff),
+                                                      float(utility_ration))
         graph.render(self.workingDirectory, format=('dot'))
 
         return graph
+
     def loadModel(self, file_path):
         self.model = pickle_load(file_path)
-        self.mine_and_draw(self.get_significance(), self.get_correlation(), self.get_edge_cutoff(), self.get_utility_ratio())
+        self.mine_and_draw(self.get_significance(), self.get_correlation(), self.get_edge_cutoff(),
+                           self.get_utility_ratio())
         return file_path
 
     def getModel(self):
