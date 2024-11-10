@@ -4,6 +4,7 @@ import sys
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QLabel, QStyleFactory, QApplication, QMainWindow, QStackedWidget, QMessageBox, QFileDialog
 from api.custom_error import FileNotFoundException, UndefinedErrorException
+from custom_ui.alpha_graph_ui.alpha_graph_view import AlphaGraphView
 from custom_ui.column_selection_view import ColumnSelectionView
 from custom_ui.heuristic_graph_ui.heuristic_graph_view import HeuristicGraphView
 from custom_ui.fuzzy_graph_ui.fuzzy_graph_view import FuzzyGraphView
@@ -44,7 +45,8 @@ class MainWindow(QMainWindow):
         # AND THEN append() YOUR ALGORITHMVIEW TO THE algorithmViews ARRAY
         # MAKE SURE THE INDEXING of both arrays match.
         self.algorithms = ["Heuristic Mining",
-                           "Fuzzy Miner"]
+                           "Fuzzy Miner",
+                           "Alpha Miner"]
         self.algorithmViews = []
 
         # The BottomOperationInterfaceWrapper adds a bottom layout with 2 buttons for mining/loading models.
@@ -56,6 +58,11 @@ class MainWindow(QMainWindow):
         self.fuzzyGraphView = BottomOperationInterfaceWrapper(
             self, FuzzyGraphView(self, 'saves/1/'), self.algorithms)
         self.algorithmViews.append(self.fuzzyGraphView)
+
+        self.alphaGraphView = BottomOperationInterfaceWrapper(
+            self, AlphaGraphView(self, 'saves/2/'), self.algorithms)
+        self.algorithmViews.append(self.alphaGraphView)
+
 
         # Add a view widget for the default view
         self.startView = BottomOperationInterfaceWrapper(
@@ -101,7 +108,7 @@ class MainWindow(QMainWindow):
             action.setEnabled(self.img_generated)
 
     # gets called by start_view.py 'create new process' button
-    def switch_to_column_selection_view(self):
+    def switch_to_column_selection_view(self, delimiter):
 
         # Open a file dialog to allow users to select a CSV file
         filename, _ = QFileDialog.getOpenFileName(
@@ -114,7 +121,7 @@ class MainWindow(QMainWindow):
         # Change to Column Selection View
         self.__reset_canvas()
         try:
-            self.columnSelectionView.load_csv(filename)
+            self.columnSelectionView.load_csv(filename, delimiter)
         except UndefinedErrorException as e:
             print(e)
             self.show_pop_up_message(str(e))

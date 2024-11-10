@@ -1,6 +1,7 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QFileDialog, QSlider, QLabel, QVBoxLayout, QGraphicsView, QGraphicsScene, QComboBox, QPushButton, QHBoxLayout, QVBoxLayout
-from PyQt5.QtGui import QPixmap, QPainter, QTransform
+from PyQt5.QtWidgets import QWidget, QFileDialog, QSlider, QLabel, QVBoxLayout, QGraphicsView, QGraphicsScene, \
+    QComboBox, QPushButton, QHBoxLayout, QVBoxLayout, QLineEdit, QDialog, QMessageBox
+from PyQt5.QtGui import QPixmap, QPainter, QTransform, QIntValidator
 import os
 from api.pickle_save import pickle_save
 
@@ -67,6 +68,32 @@ class CustomQComboBox(QComboBox):
         self.setFixedSize(150, 20)
 
 
+class DelimiterSelectionDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Select Delimiter")
+        self.delimiter = None
+
+        self.layout = QVBoxLayout()
+
+        self.label = QLabel("Select a delimiter:")
+        self.layout.addWidget(self.label)
+
+        self.combo_box = QComboBox()
+        self.combo_box.addItems([",", ";", ":", "|", " "])
+        self.layout.addWidget(self.combo_box)
+
+        self.button = QPushButton("OK")
+        self.button.clicked.connect(self.set_delimiter)
+        self.layout.addWidget(self.button)
+
+        self.setLayout(self.layout)
+
+    def set_delimiter(self):
+        self.delimiter = self.combo_box.currentText()
+        self.accept()
+
+
 class BottomOperationInterfaceLayoutWidget(QWidget):
     def __init__(self, parent):
         super().__init__()
@@ -112,7 +139,12 @@ class BottomOperationInterfaceLayoutWidget(QWidget):
         self.parent.mine_existing_process(self.selected_algorithm)
 
     def mine_new_process(self):
-        self.parent.switch_to_column_selection_view()
+        dialog = DelimiterSelectionDialog()
+        if dialog.exec_() == QDialog.Accepted:
+            delimiter = dialog.delimiter
+            self.parent.switch_to_column_selection_view(delimiter)
+        else:
+            QMessageBox.information(self, "Info", "Delimiter selection was cancelled")
 
     def __algorithm_selected(self, index):
         self.algorithm_selector.setCurrentIndex(index)
@@ -201,18 +233,29 @@ class ExportButton(QWidget):
 
 
 class CustomQSlider(QWidget):
-    def __init__(self, onSlide, QtDirection=Qt.Vertical):
+    def __init__(self, onSlide, QtDirection=Qt.Vertical, min_val=0, max_val=100):
         super().__init__()
+
+        self.min_val = min_val
+        self.max_val = max_val
 
         self.onSlideFunction = onSlide
         self.slider = QSlider(QtDirection)
         self.slider.valueChanged.connect(self.__slider_changed)
-        self.slider_label = QLabel(f"slider: value")
+        self.slider_label = QLabel("slider: value")
         self.slider_label.setAlignment(Qt.AlignCenter)
+
+        self.input = QLineEdit()
+        self.input.setFixedWidth(50)
+        self.input.setAlignment(Qt.AlignCenter)
+        self.input.setValidator(QIntValidator(min_val, max_val))  # Set the validator
+        self.input.textChanged.connect(self.__input_text_changed)
+        self.input.editingFinished.connect(self.__input_changed)
 
         self.slider_box = QHBoxLayout()
         self.slider_box.addStretch(0)
         self.slider_box.addWidget(self.slider)
+        self.slider_box.addWidget(self.input)
         self.slider_box.addStretch(0)
 
         slider_layout = QVBoxLayout()
@@ -229,6 +272,22 @@ class CustomQSlider(QWidget):
 
     def setValue(self, value):
         self.slider.setValue(value)
+        self.input.setText(str(value))
 
     def __slider_changed(self, value):
+        self.slider_label.setText(f"slider: {value}")
+        self.input.setText(str(value))
         self.onSlideFunction(value)
+
+    def __input_changed(self):
+        value = int(self.input.text())
+        self.slider.setValue(value)
+        self.onSlideFunction(value)
+
+    def __input_text_changed(self, text):
+        if text:
+            value = int(text)
+            if value < self.min_val:
+                self.input.setText(str(self.min_val))
+            elif value > self.max_val:
+                self.input.setText(str(self.max_val))

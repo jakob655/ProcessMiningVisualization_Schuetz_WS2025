@@ -3,43 +3,66 @@ import csv
 import os
 
 from api.custom_error import BadColumnException
+
 '''
 For reading in csv files. Returns a list of all cases.
 '''
-def read(filename, timeLabel = 'timestamp', caseLabel = 'case', eventLabel = 'event'):
-        # use csv.Sniffer to detect the delimiter
-    with open(filename, 'r') as f:
-        dialect = csv.Sniffer().sniff(f.read(1024))
-        delimiter = dialect.delimiter
 
-    # Read the CSV file
-    df = pd.read_csv(filename, delimiter = delimiter)
 
-        # check that the required columns exist
+def read(filename, timeLabel='timestamp', caseLabel='case', eventLabel='event'):
+    possible_delimiters = [',', ';', '\t', '|', ' ', ':']
+    df = None
+    delimiter = None
+
+    # Try to detect the delimiter using csv.Sniffer
+    with open(filename, 'r', encoding='utf-8-sig') as f:
+        sample = f.read(1024)
+        try:
+            dialect = csv.Sniffer().sniff(sample)
+            delimiter = dialect.delimiter
+        except Exception:
+            # If csv.Sniffer fails, try each possible delimiter
+            for possible_delimiter in possible_delimiters:
+                try:
+                    df = pd.read_csv(filename, delimiter=possible_delimiter, encoding='utf-8-sig')
+                    if all(col in df.columns for col in [timeLabel, caseLabel, eventLabel]):
+                        delimiter = possible_delimiter
+                        break
+                except pd.errors.ParserError:
+                    continue
+
+    if delimiter is None:
+        raise ValueError("Could not determine delimiter")
+
+    # If delimiter is detected using csv.Sniffer, read the CSV file
+    if df is None:
+        df = pd.read_csv(filename, delimiter=delimiter, encoding='utf-8-sig')
+
+    # Check that the required columns exist
     required_columns = [timeLabel, caseLabel, eventLabel]
     if not all(col in df.columns for col in required_columns):
         raise BadColumnException("csv_preprocessor.py: ERROR: Selected columns not found in DataFrame")
 
-        # Sort by timestamp 
+    # Sort by timestamp
     df = df.sort_values(by=[caseLabel, timeLabel])
 
-        # create a dictionary to store the events for each case
+    # Create a dictionary to store the events for each case
     cases = {}
 
     for _, row in df.iterrows():
-
         case = row[caseLabel]
         event = row[eventLabel]
-        
+
         if case in cases:
             cases[case].append(event)
         else:
             cases[case] = [event]
-    
+
     array = list(cases.values())
-    
+
     # Return the list of cases
     return array
+
 
 # DEPRECATED: now using pickle instead
 def save(filename, cases):
@@ -61,6 +84,7 @@ def save(filename, cases):
                 f.write(str(event))
             if i < len(array) - 1:
                 f.write("\n")
+
 
 # DEPRECATED: now using pickle instead
 def read_cases(filename):
