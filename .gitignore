@@ -1,5 +1,6 @@
 # Project files specific to certain IDE e.g. PyCharm
 .idea/
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -14,6 +15,8 @@ __pycache__/
 venv/
 venv_test/
 build/
+# Important to ignore build/ directory. The build custom components are stored in build/ directory.
+# build/
 develop-eggs/
 dist/
 downloads/
@@ -31,6 +34,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+node_modules/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -111,13 +115,13 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-#.env
-#.venv
-#env/
-#venv/
-#ENV/
-#env.bak/
-#venv.bak/
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
 # Spyder project settings
 .spyderproject
@@ -137,3 +141,8 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+.DS_Store
+
+secret_data/
+
+**/*.ipynb

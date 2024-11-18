@@ -1,15 +1,5 @@
 numpy
 pandas
 graphviz
-matplotlib
-PyQtWebEngine
-PyQt5
 ddcal
-dash
-flask
-dash_interactive_graphviz
-Werkzeug
-
-# These are for unittesting:
-networkx
-pydot
+streamlit==1.36.0
