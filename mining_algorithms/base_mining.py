@@ -33,8 +33,8 @@ class BaseMining(MiningInterface):
             list(self.appearance_frequency.values())
         )
 
-        self.start_nodes = self.__get_start_nodes()
-        self.end_nodes = self.__get_end_nodes()
+        self.start_nodes = self._get_start_nodes()
+        self.end_nodes = self._get_end_nodes()
 
         self.logger.debug(f"Start Nodes: {self.start_nodes}")
         self.logger.debug(f"End Nodes: {self.end_nodes}")
@@ -98,7 +98,7 @@ class BaseMining(MiningInterface):
         ]
         return scale_factor
 
-    def __get_start_nodes(self) -> set[str]:
+    def _get_start_nodes(self) -> set[str]:
         """get all start nodes from the log. A start node is an event that is the first event in a trace.
 
         Returns
@@ -108,7 +108,7 @@ class BaseMining(MiningInterface):
         """
         return set([trace[0] for trace in self.log.keys() if len(trace) > 0])
 
-    def __get_end_nodes(self) -> set[str]:
+    def _get_end_nodes(self) -> set[str]:
         """get all end nodes from the log. An end node is an event that is the last event in a trace.
 
         Returns

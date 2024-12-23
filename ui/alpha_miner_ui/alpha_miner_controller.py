@@ -1,32 +1,24 @@
 from ui.base_algorithm_ui.base_algorithm_controller import BaseAlgorithmController
 from ui.alpha_miner_ui.alpha_miner_view import AlphaMinerView
 import streamlit as st
-from api.pickle_save import pickle_load
 from mining_algorithms.alpha_mining import AlphaMining
 
 
-class AlphaGraphController(BaseAlgorithmController):
+class AlphaMinerController(BaseAlgorithmController):
     """Controller for the Alpha Miner algorithm."""
 
-    def __init__(
-        self, working_directory, views=None, mining_model_class=None, dataframe_transformations=None
-    ):
-        """Initializes the controller for the Alpha Miner algorithm.
+    def __init__(self, views=None, mining_model_class=None, dataframe_transformations=None):
+        """Initializes the Alpha Miner controller.
 
         Parameters
         ----------
-        working_directory : str
-            The directory where files (e.g., graph renderings) will be stored.
         views : List[BaseAlgorithmView] | BaseAlgorithmView, optional
-            The views for the Alpha Miner algorithm. If None is passed, the default view is used, by default None
+            The views for the Heuristic Miner algorithm. If None is passed, the default view is used, by default None
         mining_model_class : MiningInterface Class, optional
-            The mining model class for the Alpha Miner algorithm. If None is passed, the default model class is used, by default None
+            The mining model class for the Heuristic Miner algorithm. If None is passed, the default model class is used, by default None
         dataframe_transformations : DataframeTransformations, optional
             The class for the dataframe transformations. If None is passed, a new instance is created, by default None
         """
-        self.model = None
-        self.working_directory = working_directory
-
         if views is None:
             views = [AlphaMinerView()]
 
@@ -43,53 +35,25 @@ class AlphaGraphController(BaseAlgorithmController):
         str
             The page title.
         """
-        return "Alpha Miner"
+        return "Alpha Mining"
 
-    def start_mining(self, cases):
-        """Starts the mining process for the Alpha Miner algorithm.
-
-        Parameters
-        ----------
-        cases : iterable
-            A collection of cases to be processed.
+    def process_algorithm_parameters(self):
+        """Processes the algorithm parameters from the session state. The parameters are set to the instance variables.
+        If the parameters are not set in the session state, the default values are used.
         """
-        self.model = self.mining_model_class(set(cases))
-        self.draw_graph()
+        # Alpha Miner does not have any user-configurable parameters in this implementation.
+        pass
 
-    def load_model(self, file_path):
-        """Loads a saved model from the specified file path.
+    def perform_mining(self) -> None:
+        """Performs the mining of the Alpha Miner algorithm."""
+        self.mining_model.draw_graph()
 
-        Parameters
-        ----------
-        file_path : str
-            The path to the saved model file.
+    def have_parameters_changed(self) -> bool:
+        """Checks if the algorithm parameters have changed."""
+        # No dynamic parameters are implemented for Alpha Miner, so always returns False.
+        return False
 
-        Returns
-        -------
-        str
-            The path to the loaded model file.
-        """
-        self.model = pickle_load(file_path)
-        self.draw_graph()
-        return file_path
-
-    def draw_graph(self):
-        """Draws the dependency graph for the Alpha Miner algorithm."""
-        if not self.model:
-            st.error("No model available to draw the graph.")
-            return None
-
-        graph = self.model.draw_graph()
-        graph.render(self.working_directory, format="dot")
-        st.success("Graph rendered successfully.")
-        return graph
-
-    def get_model(self):
-        """Returns the current model instance.
-
-        Returns
-        -------
-        AlphaMining
-            The current Alpha Mining model instance.
-        """
-        return self.model
+    def get_sidebar_values(self) -> dict[str, tuple[int | float, int | float]]:
+        """Returns the sidebar values for the Alpha Miner algorithm."""
+        # No sliders are needed for this implementation.
+        return {}

@@ -26,6 +26,7 @@ class HeuristicMinerController(BaseAlgorithmController):
 
         if mining_model_class is None:
             mining_model_class = HeuristicMining
+
         super().__init__(views, mining_model_class, dataframe_transformations)
 
     def get_page_title(self) -> str:
@@ -49,14 +50,18 @@ class HeuristicMinerController(BaseAlgorithmController):
         if "frequency" not in st.session_state:
             st.session_state.frequency = self.mining_model.get_min_frequency()
 
+        if "spm_threshold" not in st.session_state:
+            st.session_state.spm_threshold = self.mining_model.get_spm_threshold()
+
         # set instance variables from session state
         self.threshold = st.session_state.threshold
         self.frequency = st.session_state.frequency
+        self.spm_threshold = st.session_state.spm_threshold
 
     def perform_mining(self) -> None:
         """Performs the mining of the Heuristic Miner algorithm."""
         self.mining_model.create_dependency_graph_with_graphviz(
-            self.threshold, self.frequency
+            self.threshold, self.frequency, self.spm_threshold
         )
 
     def have_parameters_changed(self) -> bool:
@@ -70,6 +75,7 @@ class HeuristicMinerController(BaseAlgorithmController):
         return (
             self.mining_model.get_threshold() != self.threshold
             or self.mining_model.get_min_frequency() != self.frequency
+            or self.mining_model.get_spm_threshold() != self.spm_threshold
         )
 
     def get_sidebar_values(self) -> dict[str, tuple[int | float, int | float]]:
@@ -84,6 +90,7 @@ class HeuristicMinerController(BaseAlgorithmController):
         sidebar_values = {
             "frequency": (1, self.mining_model.get_max_frequency()),
             "threshold": (0.0, 1.0),
+            "spm_threshold": (0.0, 1.0),
         }
 
         return sidebar_values

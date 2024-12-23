@@ -33,3 +33,11 @@ class HeuristicMinerView(BaseAlgorithmView):
             key="threshold",
             help="Minimum dependency for displaying edges. Edges with a lower dependency will be removed.",
         )
+
+        number_input_slider(
+            label="SPM Threshold",
+            min_value=sidebar_values["spm_threshold"][0],
+            max_value=sidebar_values["spm_threshold"][1],
+            key="spm_threshold",
+            help="Filter nodes based on the SPM metric threshold.",
+        )

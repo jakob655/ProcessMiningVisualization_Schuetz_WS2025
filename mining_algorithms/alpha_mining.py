@@ -1,11 +1,13 @@
 import itertools
-import copy
-from graphviz import Digraph
+from logger import get_logger
+from graphs.visualization.alpha_graph import AlphaGraph
+from mining_algorithms.base_mining import BaseMining
 
 
-class AlphaMining:
+class AlphaMining(BaseMining):
     def __init__(self, cases):
-        self.cases = cases
+        super().__init__(cases)
+        self.logger = get_logger("AlphaMining")
         self.start_events = self.get_start_events()
         self.end_events = self.get_end_events()
         self.unique_events = self.get_unique_events()
@@ -15,7 +17,6 @@ class AlphaMining:
         self.choice = self.choice(self.unique_events, self.causality, self.parallel)
         self.xl_set = self.generate_set_xl(self.unique_events, self.choice, self.causality)
         self.yl_set = self.generate_set_yl(self.xl_set, self.parallel)
-        self.events_to_draw = self.__events_to_draw()
         self.footprint = self.footprint()
 
     # This implementation follows the steps outlined in the lecture by Professor Wil van der Aalst on process mining.
@@ -31,7 +32,7 @@ class AlphaMining:
     def get_unique_events(self):
         unique_events = []
 
-        for case in self.cases:
+        for case in self.log:
             for event in case:
                 unique_events.append(event)
 
@@ -43,7 +44,7 @@ class AlphaMining:
     def get_start_events(self):
         start_events = []
 
-        for case in self.cases:
+        for case in self.log:
             start_events.append(case[0])
 
         return set(start_events)
@@ -54,7 +55,7 @@ class AlphaMining:
     def get_end_events(self):
         end_events = []
 
-        for case in self.cases:
+        for case in self.log:
             end_events.append(case[len(case) - 1])
 
         return set(end_events)
@@ -112,80 +113,71 @@ class AlphaMining:
 
     # Step 6
     def draw_graph(self):
-        graph = Digraph()
+        self.graph = AlphaGraph()
 
         # Add the start node
-        graph.node("start", label="start", shape='doublecircle', style='filled', fillcolor='green')
+        self.graph.add_start_node()
 
         # Add the end node
-        graph.node("end", label="end", shape='doublecircle', style='filled', fillcolor='red')
+        self.graph.add_end_node()
 
-        # Add empty circle node
-        graph.node("empty_circle_start", label="", shape='circle', style="filled", fillcolor='#FDFFF5')
-        graph.node("empty_circle_end", label="", shape='circle', style="filled", fillcolor='#FDFFF5')
+        # Add empty circles for start and end
+        self.graph.add_empty_circle("empty_circle_start")
+        self.graph.add_empty_circle("empty_circle_end")
 
-        for node in self.events_to_draw:
-            graph.node(str(node), label=str(node) + "\n", shape="box", style="filled", fillcolor='#FDFFF5')
+        # In case there is just 1 layer of nodes (start_nodes = end_nodes) somehow __events_to_draw() is empty
+        if len(self.__events_to_draw()) == 0:
+            for node in self.events:
+                self.graph.add_node(str(node))
+        else:
+            for node in self.__events_to_draw():
+                self.graph.add_node(str(node))
 
         # Connect the start node to the empty circle for start nodes
-        graph.edge("start", "empty_circle_start", penwidth=str(0.1), style="filled", fillcolor='#FDFFF5')
+        self.graph.create_edge("Start", "empty_circle_start", penwidth=0.1)
 
+        # Add and connect nodes based on yl_set logic
         for _set in self.yl_set:
             if len(_set) == 2:
+                # Single-to-Single Transition
                 if len(_set[0]) == 1 and len(_set[1]) == 1:
-                    graph.node(str(_set[0]) + str(_set[1]), label="", shape='circle', style="filled", fillcolor='#FDFFF5')
-                    graph.edge(str(_set[0][0]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
-                    graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][0]), penwidth=str(0.1))
+                    circle_id = f"{_set[0]}_{_set[1]}"
+                    self.graph.add_empty_circle(circle_id)
+                    self.graph.create_edge(str(_set[0][0]), circle_id, penwidth=0.1)
+                    self.graph.create_edge(circle_id, str(_set[1][0]), penwidth=0.1)
+                # Single-to-Multiple Transition
                 elif len(_set[0]) == 1 and len(_set[1]) == 2:
-                    # XOR-split
-                    if self.__is_set_in_choice(_set[1], self.choice):
-                        graph.node(str(_set[0]) + str(_set[1]), label="", shape='circle', style='filled',
-                                   fillcolor='#FDFFF5')
-                        graph.edge(str(_set[0][0]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
-                        graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][0]), penwidth=str(0.1))
-                        graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][1]), penwidth=str(0.1))
-                    # AND-split
-                    elif self.__is_set_in_parallel(_set[1], self.parallel):
-                        graph.node(str(_set[0]) + str(_set[1]), label="", shape='circle', style='filled',
-                                   fillcolor='#FDFFF5')
-                        graph.node(str(_set[1]) + str(_set[0]), label="", shape='circle', style='filled',
-                                   fillcolor='#FDFFF5')
-                        graph.edge(str(_set[0][0]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
-                        graph.edge(str(_set[0][0]), str(_set[1]) + str(_set[0]), penwidth=str(0.1))
-                        graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][0]), penwidth=str(0.1))
-                        graph.edge(str(_set[1]) + str(_set[0]), str(_set[1][1]), penwidth=str(0.1))
-
+                    circle_id = f"{_set[0]}_{_set[1]}"
+                    self.graph.add_empty_circle(circle_id)
+                    self.graph.create_edge(str(_set[0][0]), circle_id, penwidth=0.1)
+                    for event in _set[1]:
+                        self.graph.create_edge(circle_id, str(event), penwidth=0.1)
+                # Multiple-to-Single Transition
                 elif len(_set[0]) == 2 and len(_set[1]) == 1:
-                    # XOR-join
-                    if self.__is_set_in_choice(_set[0], self.choice):
-                        graph.node(str(_set[0]) + str(_set[1]), label="", shape='circle', style='filled',
-                                   fillcolor='#FDFFF5')
-                        graph.edge(str(_set[0][0]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
-                        graph.edge(str(_set[0][1]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
-                        graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][0]), penwidth=str(0.1))
-                    # AND-join
-                    elif self.__is_set_in_parallel(_set[0], self.parallel):
-                        graph.node(str(_set[0]) + str(_set[1]), label="", shape='circle', style='filled',
-                                   fillcolor='#FDFFF5')
-                        graph.node(str(_set[1]) + str(_set[0]), label="", shape='circle', style='filled',
-                                   fillcolor='#FDFFF5')
-                        graph.edge(str(_set[0][0]), str(_set[0]) + str(_set[1]), penwidth=str(0.1))
-                        graph.edge(str(_set[0][1]), str(_set[1]) + str(_set[0]), penwidth=str(0.1))
-                        graph.edge(str(_set[0]) + str(_set[1]), str(_set[1][0]), penwidth=str(0.1))
-                        graph.edge(str(_set[1]) + str(_set[0]), str(_set[1][0]), penwidth=str(0.1))
+                    circle_id = f"{_set[0]}_{_set[1]}"
+                    self.graph.add_empty_circle(circle_id)
+                    for event in _set[0]:
+                        self.graph.create_edge(str(event), circle_id, penwidth=0.1)
+                    self.graph.create_edge(circle_id, str(_set[1][0]), penwidth=0.1)
 
-        # Connect the empty circle to the starting nodes
-        for node in self.get_start_events():
-            graph.edge("empty_circle_start", str(node), penwidth=str(0.1))
+        # In case there is just 1 layer of nodes (start_nodes = end_nodes) somehow __events_to_draw() is empty
+        if len(self.__events_to_draw()) == 0:
+            for node in self.events:
+                # Connect the empty circle to the starting nodes
+                self.graph.create_edge("empty_circle_start", str(node), penwidth=0.1)
+                # Connect the end nodes to the empty circle for end nodes
+                self.graph.create_edge(str(node), "empty_circle_end", penwidth=0.1)
+        else:
+            # Connect the empty circle to the starting nodes
+            for node in self.get_start_events(): # self._get_start_nodes()
+                self.graph.create_edge("empty_circle_start", str(node), penwidth=0.1)
 
-        # Connect the end nodes to the empty circle for end nodes
-        for node in self.get_end_events():
-            graph.edge(str(node), "empty_circle_end", penwidth=str(0.1))
+            # Connect the end nodes to the empty circle for end nodes
+            for node in self.get_end_events(): # self._get_end_nodes()
+                self.graph.create_edge(str(node), "empty_circle_end", penwidth=0.1)
 
         # Connect the empty circle to the end node
-        graph.edge("empty_circle_end", "end", penwidth=str(0.1))
-
-        return graph
+        self.graph.create_edge("empty_circle_end", "End", penwidth=0.1)
 
     # ALPHA MINER ALGORITHM IMPLEMENTATION END
     ####################################################################################################################
@@ -199,7 +191,7 @@ class AlphaMining:
     def direct_succession(self):
 
         direct_succession = []
-        for case in self.cases:
+        for case in self.log:
             for i in range(len(case) - 1):
                 x = case[i]
                 y = case[i + 1]
@@ -253,7 +245,7 @@ class AlphaMining:
         return set(choice)
 
     def footprint(self):
-        footprint = ["All transitions: {}".format(self.unique_events),
+        footprint = ["All transitions: {}".format(self.events),
                      "Direct succession: {}".format(self.direct_succession), "Causality: {}".format(self.causality),
                      "Parallel: {}".format(self.parallel), "Choice: {}".format(self.choice)]
         return '\n'.join(footprint)
