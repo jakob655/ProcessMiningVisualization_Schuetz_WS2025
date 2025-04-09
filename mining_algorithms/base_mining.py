@@ -36,6 +36,8 @@ class BaseMining(MiningInterface):
         self.start_nodes = self._get_start_nodes()
         self.end_nodes = self._get_end_nodes()
 
+        self.spm_threshold = 0.5
+
         self.logger.debug(f"Start Nodes: {self.start_nodes}")
         self.logger.debug(f"End Nodes: {self.end_nodes}")
 
@@ -186,3 +188,102 @@ class BaseMining(MiningInterface):
         minimum_trace_freq = round(max(self.log.values()) * threshold)
 
         return minimum_trace_freq
+
+    def calculate_degree(self, node, events, succession_matrix):
+        """Calculate the degree of a node in the succession matrix.
+
+        The degree is defined as the sum of the node's in-degree and out-degree,
+        based on the succession matrix.
+
+        Parameters
+        ----------
+        node : str
+            The event node whose degree is being calculated.
+        events : list[str]
+            List of all event names in the log.
+        succession_matrix : np.ndarray
+            Matrix representing direct succession counts between events.
+
+        Returns
+        -------
+        int
+            The total degree (in-degree + out-degree) of the node.
+        """
+        index = events.index(node)
+        in_degree = sum(succession_matrix[:, index])
+        out_degree = sum(succession_matrix[index, :])
+        return in_degree + out_degree
+
+    def calculate_spm(self, node, events, node_frequency, A, L, succession_matrix):
+        """Calculate the Search Process Model (SPM) score for a node.
+
+        Parameters
+        ----------
+        node : str
+            The event node being evaluated.
+        events : list[str]
+            List of all events in the log.
+        node_frequency : int
+            Number of times the node appears in the log.
+        A : int
+            Number of distinct activities in the log.
+        L : int
+            Total number of events in the log.
+        succession_matrix : np.ndarray
+            Matrix representing direct succession counts between events.
+
+        Returns
+        -------
+        float
+            The calculated SPM score for the node.
+        """
+        degree = self.calculate_degree(node, events, succession_matrix)
+        frequency = node_frequency
+        spm = 1 - ((degree * A) / (frequency * L))
+        return spm
+
+    def calculate_A_and_L(self):
+        """Calculate the number of distinct activities (A) and total events (L) in the log.
+
+        Returns
+        -------
+        tuple[int, int]
+            A tuple containing A (number of distinct activities) and L (total number of events).
+        """
+        activities = set()
+        total_events = 0
+        for trace in self.log:
+            total_events += len(trace)
+            activities.update(trace)
+        return len(activities), total_events
+
+    def get_spm_threshold(self):
+        """Get the current threshold used for the SPM filter.
+
+            Returns
+            -------
+            float
+                The SPM threshold value.
+        """
+        return self.spm_threshold
+
+    def get_spm_filtered_events(self) -> set[str]:
+        """Filter events based on their SPM value using the current threshold.
+
+        This method calculates the SPM value for all events in the log and filters out those
+        which are below the current `spm_threshold`. The result is a set of events that passed
+        the filter and are considered relevant for process model generation.
+
+        Returns
+        -------
+        set[str]
+            A set of event labels that have an SPM value greater than or equal to the threshold.
+        """
+        _A, _L = self.calculate_A_and_L()
+        filtered_nodes = []
+        for node in self.events:
+            node_freq = self.appearance_frequency.get(node)
+            spm = self.calculate_spm(node, self.events, node_freq, _A, _L, self.succession_matrix)
+            if spm >= self.spm_threshold:
+                filtered_nodes.append(node)
+        return filtered_nodes

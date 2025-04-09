@@ -9,11 +9,9 @@ class HeuristicMining(BaseMining):
         super().__init__(log)
         self.logger = get_logger("HeuristicMining")
 
-        self.succession_matrix = self.__create_succession_matrix()
         self.dependency_matrix = self.__create_dependency_matrix()
 
         # Graph modifiers
-        self.spm_threshold = 0.5
         self.min_edge_thickness = 1
         self.min_frequency = 1
         self.dependency_threshold = 0.5
@@ -33,14 +31,7 @@ class HeuristicMining(BaseMining):
 
         self.graph = HeuristicGraph()
 
-        _A, _L = self.calculate_A_and_L()
-
-        filtered_nodes = []
-        for node in self.events:
-            node_freq = self.appearance_frequency.get(node)
-            spm = self.calculate_spm(node, self.events, node_freq, _A, _L, self.succession_matrix)
-            if spm >= spm_threshold:
-                filtered_nodes.append(node)
+        filtered_nodes = self.get_spm_filtered_events()
 
         # add nodes to graph
         for node in filtered_nodes:
@@ -101,34 +92,11 @@ class HeuristicMining(BaseMining):
         self.graph.add_starting_edges(source_nodes - self.start_nodes)
         self.graph.add_ending_edges(sink_nodes - self.end_nodes)
 
-    def calculate_degree(self, node, events, succession_matrix):
-        index = events.index(node)
-        in_degree = sum(succession_matrix[:, index])
-        out_degree = sum(succession_matrix[index, :])
-        return in_degree + out_degree
-
-    def calculate_spm(self, node, events, node_frequency, A, L, succession_matrix):
-        degree = self.calculate_degree(node, events, succession_matrix)
-        frequency = node_frequency
-        spm = 1 - ((degree * A) / (frequency * L))
-        return spm
-
-    def calculate_A_and_L(self):
-        activities = set()
-        total_events = 0
-        for trace in self.log:
-            total_events += len(trace)
-            activities.update(trace)
-        return len(activities), total_events
-
     def get_min_frequency(self):
         return self.min_frequency
 
     def get_threshold(self):
         return self.dependency_threshold
-
-    def get_spm_threshold(self):
-        return self.spm_threshold
 
     def get_max_frequency(self):
         max_freq = 0
@@ -136,21 +104,6 @@ class HeuristicMining(BaseMining):
             if value > max_freq:
                 max_freq = value
         return max_freq
-
-    def __create_succession_matrix(self):
-        succession_matrix = np.zeros((len(self.events), len(self.events)))
-        for trace in self.log:
-            index_x = -1
-            for element in trace:
-
-                if index_x < 0:
-                    index_x += 1
-                    continue
-                x = self.events.index(trace[index_x])
-                y = self.events.index(element)
-                succession_matrix[x][y] += 1
-                index_x += 1
-        return succession_matrix
 
     def __create_dependency_matrix(self):
         dependency_matrix = np.zeros(self.succession_matrix.shape)

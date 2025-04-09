@@ -41,19 +41,37 @@ class AlphaMinerController(BaseAlgorithmController):
         """Processes the algorithm parameters from the session state. The parameters are set to the instance variables.
         If the parameters are not set in the session state, the default values are used.
         """
-        # Alpha Miner does not have any user-configurable parameters in this implementation.
-        pass
+        if "spm_threshold" not in st.session_state:
+            st.session_state.spm_threshold = self.mining_model.get_spm_threshold()
+
+        # set instance variable from session state
+        self.spm_threshold = st.session_state.spm_threshold
 
     def perform_mining(self) -> None:
         """Performs the mining of the Alpha Miner algorithm."""
-        self.mining_model.draw_graph()
+        self.mining_model.draw_graph(self.spm_threshold)
 
     def have_parameters_changed(self) -> bool:
-        """Checks if the algorithm parameters have changed."""
-        # No dynamic parameters are implemented for Alpha Miner, so always returns False.
-        return False
+        """Checks if the algorithm parameters have changed.
+
+        Returns
+        -------
+        bool
+            True if the algorithm parameters have changed, False otherwise.
+        """
+        return self.mining_model.get_spm_threshold() != self.spm_threshold
 
     def get_sidebar_values(self) -> dict[str, tuple[int | float, int | float]]:
-        """Returns the sidebar values for the Alpha Miner algorithm."""
-        # No sliders are needed for this implementation.
-        return {}
+        """Returns the sidebar values for the Alpha Miner algorithm.
+
+        Returns
+        -------
+        dict[str, tuple[int | float, int | float]]
+            A dictionary containing the minimum and maximum values for the sidebar sliders.
+            The keys of the dictionary are equal to the keys of the sliders.
+        """
+        sidebar_values = {
+           "spm_threshold": (0.0, 1.0),
+        }
+
+        return sidebar_values
