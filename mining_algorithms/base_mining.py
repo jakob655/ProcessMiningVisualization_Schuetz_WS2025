@@ -36,10 +36,15 @@ class BaseMining(MiningInterface):
         self.start_nodes = self._get_start_nodes()
         self.end_nodes = self._get_end_nodes()
 
-        self.spm_threshold = 0.5
-
         self.logger.debug(f"Start Nodes: {self.start_nodes}")
         self.logger.debug(f"End Nodes: {self.end_nodes}")
+
+        self.spm_threshold = 0.0
+        self.filtered_events = self.get_spm_filtered_events()
+        self.filtered_log = self.get_spm_filtered_log()
+
+        self.logger.debug(f"Filtered Events: {self.filtered_events}")
+        self.logger.debug(f"Filtered Log: {self.filtered_log}")
 
     def __filter_out_all_events(self) -> tuple[list[str], dict[str, int]]:
         """create a list of all events and a dictionary of all events with their frequencies
@@ -60,7 +65,7 @@ class BaseMining(MiningInterface):
         activities = list(dic.keys())
         return activities, dic
 
-    def calulate_node_size(self, node: str) -> tuple[float, float]:
+    def calculate_node_size(self, node: str) -> tuple[float, float]:
         """calculate the size of a node based on the frequency of the event.
         The size is determined by the scale factor and the minimum node size.
 
@@ -267,10 +272,10 @@ class BaseMining(MiningInterface):
         """
         return self.spm_threshold
 
-    def get_spm_filtered_events(self) -> set[str]:
+    def get_spm_filtered_events(self) -> list[str]:
         """Filter events based on their SPM value using the current threshold.
 
-        This method calculates the SPM value for all events in the log and filters out those
+        Calculates the SPM value for all events in the log and filters out those
         which are below the current `spm_threshold`. The result is a set of events that passed
         the filter and are considered relevant for process model generation.
 
@@ -280,10 +285,30 @@ class BaseMining(MiningInterface):
             A set of event labels that have an SPM value greater than or equal to the threshold.
         """
         _A, _L = self.calculate_A_and_L()
-        filtered_nodes = []
+        filtered_events = []
         for node in self.events:
             node_freq = self.appearance_frequency.get(node)
             spm = self.calculate_spm(node, self.events, node_freq, _A, _L, self.succession_matrix)
             if spm >= self.spm_threshold:
-                filtered_nodes.append(node)
-        return filtered_nodes
+                filtered_events.append(node)
+        return filtered_events
+
+    def get_spm_filtered_log(self) -> dict[tuple[str, ...], int]:
+        """Filter log traces to include only events passing the SPM threshold.
+
+        Filters each trace in the original log by removing events that did not pass
+        the SPM threshold (i.e., events not present in `self.filtered_events`). The result is a
+        dictionary of filtered traces mapped to their original frequencies. Traces that become
+        empty after filtering are excluded.
+
+        Returns
+        -------
+        dict[tuple[str], int]
+            A dictionary where keys are filtered traces (as tuples of event labels) and
+            values are their corresponding frequencies in the original log.
+        """
+        return {
+            filtered_trace: freq
+            for trace, freq in self.log.items()
+            if (filtered_trace := tuple(e for e in trace if e in self.filtered_events))
+        }

@@ -17,6 +17,16 @@ class FuzzyMinerView(BaseAlgorithmView):
             A dictionary containing the minimum and maximum values for the sidebar sliders.
             The keys of the dictionary are equal to the keys of the sliders.
         """
+        st.write("SPM Filter")
+
+        number_input_slider(
+            label="SPM Threshold",
+            min_value=sidebar_values["spm_threshold"][0],
+            max_value=sidebar_values["spm_threshold"][1],
+            key="spm_threshold",
+            help="Filter nodes based on the SPM metric threshold.",
+        )
+
         st.write("Significance Cutoff")
 
         number_input_slider(

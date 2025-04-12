@@ -9,10 +9,7 @@ class AlphaMining(BaseMining):
         super().__init__(log)
         self.logger = get_logger("AlphaMining")
 
-        self.filtered_events = self.get_spm_filtered_events()
-        self.filtered_log = self.__get_spm_filtered_log(self.filtered_events)
-
-        self.__recalculate_model_state()
+        self.__calculate_model_state()
 
     # This implementation follows the steps outlined in the lecture by Professor Wil van der Aalst on process mining.
     # The lecture video can be found at: https://www.youtube.com/watch?v=ATBEEEDxHTQ
@@ -98,7 +95,7 @@ class AlphaMining(BaseMining):
 
         self.spm_threshold = spm_threshold
         self.filtered_events = self.get_spm_filtered_events()
-        self.filtered_log = self.__get_spm_filtered_log(self.filtered_events)
+        self.filtered_log = self.get_spm_filtered_log()
 
 
         if not self.filtered_events:
@@ -109,7 +106,7 @@ class AlphaMining(BaseMining):
         self.graph.add_empty_circle("empty_circle_start")
         self.graph.add_empty_circle("empty_circle_end")
 
-        self.__recalculate_model_state()
+        self.__calculate_model_state()
 
         # Add nodes (either all filtered or only relevant via yl_set)
         for node in self.__events_to_draw() or self.filtered_events:
@@ -309,14 +306,7 @@ class AlphaMining(BaseMining):
                     events_to_draw.append(node)
         return set(events_to_draw)
 
-    def __get_spm_filtered_log(self, filtered_events):
-        return {
-            filtered_trace: freq
-            for trace, freq in self.log.items()
-            if (filtered_trace := tuple(e for e in trace if e in filtered_events))
-        }
-
-    def __recalculate_model_state(self):
+    def __calculate_model_state(self):
         self.direct_succession_set = self._calculate_direct_succession()
         self.causality_set = self._calculate_causality(self.direct_succession_set)
         self.parallel_set = self._calculate_parallel(self.direct_succession_set)

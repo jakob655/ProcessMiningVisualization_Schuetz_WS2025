@@ -25,7 +25,7 @@ class InductiveMining(BaseMining):
         """
         super().__init__(log)
         self.logger = get_logger("InductiveMining")
-        self.node_sizes = {k: self.calulate_node_size(k) for k in self.events}
+        self.node_sizes = {k: self.calculate_node_size(k) for k in self.events}
         self.activity_threshold = 0.0
         self.traces_threshold = 0.2
         self.filtered_log = None

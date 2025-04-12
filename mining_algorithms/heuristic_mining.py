@@ -31,12 +31,12 @@ class HeuristicMining(BaseMining):
 
         self.graph = HeuristicGraph()
 
-        filtered_nodes = self.get_spm_filtered_events()
+        self.filtered_events = self.get_spm_filtered_events()
 
         # add nodes to graph
-        for node in filtered_nodes:
+        for node in self.filtered_events:
             node_freq = self.appearance_frequency.get(node)
-            w, h = self.calulate_node_size(node)
+            w, h = self.calculate_node_size(node)
             self.graph.add_event(node, node_freq, (w, h))
 
         # cluster the edge thickness sizes based on frequency
@@ -47,10 +47,10 @@ class HeuristicMining(BaseMining):
         )
 
         # add edges to graph
-        for i in range(len(filtered_nodes)):
+        for i in range(len(self.filtered_events)):
             column_total = 0.0
             row_total = 0.0
-            for j in range(len(filtered_nodes)):
+            for j in range(len(self.filtered_events)):
                 column_total = column_total + dependency_graph[i][j]
                 row_total = row_total + dependency_graph[j][i]
                 if dependency_graph[i][j] == 1.:
@@ -61,32 +61,32 @@ class HeuristicMining(BaseMining):
                                              edge_freq_sorted.index(self.dependency_matrix[i][j])] + self.min_edge_thickness
 
                     self.graph.create_edge(
-                        source=str(filtered_nodes[i]),
-                        destination=str(filtered_nodes[j]),
+                        source=str(self.filtered_events[i]),
+                        destination=str(self.filtered_events[j]),
                         size=edge_thickness,
                         weight=int(self.succession_matrix[i][j])
                     )
 
-                if j == len(filtered_nodes) - 1 and column_total == 0 and filtered_nodes[i] not in self.end_nodes:
-                    self.end_nodes.add(filtered_nodes[i])
-                if j == len(filtered_nodes) - 1 and row_total == 0 and filtered_nodes[i] not in self.start_nodes:
-                    self.start_nodes.add(filtered_nodes[i])
+                if j == len(self.filtered_events) - 1 and column_total == 0 and self.filtered_events[i] not in self.end_nodes:
+                    self.end_nodes.add(self.filtered_events[i])
+                if j == len(self.filtered_events) - 1 and row_total == 0 and self.filtered_events[i] not in self.start_nodes:
+                    self.start_nodes.add(self.filtered_events[i])
 
         # add start and end nodes
         self.graph.add_start_node()
         self.graph.add_end_node()
 
         # add starting and ending edges from the log to the graph. Only if they are filtered
-        self.graph.add_starting_edges(self.start_nodes.intersection(filtered_nodes))
-        self.graph.add_ending_edges(self.end_nodes.intersection(filtered_nodes))
+        self.graph.add_starting_edges(self.start_nodes.intersection(self.filtered_events))
+        self.graph.add_ending_edges(self.end_nodes.intersection(self.filtered_events))
 
         # get filtered sources and sinks from the dependency graph
         source_nodes = self.__get_sources_from_dependency_graph(
             dependency_graph
-        ).intersection(filtered_nodes)
+        ).intersection(self.filtered_events)
         sink_nodes = self.__get_sinks_from_dependency_graph(
             dependency_graph
-        ).intersection(filtered_nodes)
+        ).intersection(self.filtered_events)
 
         # add starting and ending edges from the dependency graph to the graph
         self.graph.add_starting_edges(source_nodes - self.start_nodes)
