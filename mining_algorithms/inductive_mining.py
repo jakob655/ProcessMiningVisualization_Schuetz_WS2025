@@ -25,12 +25,11 @@ class InductiveMining(BaseMining):
         """
         super().__init__(log)
         self.logger = get_logger("InductiveMining")
-        self.node_sizes = {k: self.calculate_node_size(k) for k in self.events}
         self.activity_threshold = 0.0
         self.traces_threshold = 0.2
         self.filtered_log = None
 
-    def generate_graph(self, activity_threshold: float, traces_threshold: float):
+    def generate_graph(self, activity_threshold: float, traces_threshold: float, spm_threshold: float):
         """Generate a graph from the log using the Inductive Mining algorithm.
 
         Parameters
@@ -44,13 +43,17 @@ class InductiveMining(BaseMining):
         """
         self.activity_threshold = activity_threshold
         self.traces_threshold = traces_threshold
+        self.spm_threshold = spm_threshold
+        self.spm_filtered_events = self.get_spm_filtered_events()
+        self.spm_filtered_log = self.get_spm_filtered_log()
+        self.node_sizes = {k: self.calculate_node_size(k) for k in self.spm_filtered_events}
 
         events_to_remove = self.get_events_to_remove(activity_threshold)
 
         self.logger.debug(f"Events to remove: {events_to_remove}")
         min_traces_frequency = self.calulate_minimum_traces_frequency(traces_threshold)
 
-        filtered_log = filter_traces(self.log, min_traces_frequency)
+        filtered_log = filter_traces(self.spm_filtered_log, min_traces_frequency)
         filtered_log = filter_events(filtered_log, events_to_remove)
 
         if filtered_log == self.filtered_log:
@@ -208,7 +211,7 @@ class InductiveMining(BaseMining):
         set[str]
             A set containing all unique events in the log.
         """
-        return set([event for case in log for event in case])
+        return set(event for case in log for event in case if event in self.spm_filtered_events)
 
     def get_activity_threshold(self) -> float:
         """Get the activity threshold used for filtering the log.

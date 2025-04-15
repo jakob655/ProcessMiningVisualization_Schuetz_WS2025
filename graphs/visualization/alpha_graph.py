@@ -21,7 +21,7 @@ class AlphaGraph(BaseGraph):
         """
         # Convert numerical attributes to strings if necessary
         edge_data = {key: str(value) if isinstance(value, (int, float)) else value for key, value in edge_data.items()}
-        super().add_edge(source, destination, **edge_data)
+        super().add_edge(source, destination, None, **edge_data)
 
     def add_empty_circle(self, circle_id: str) -> None:
         """Add an empty circle node to the graph.
@@ -33,9 +33,7 @@ class AlphaGraph(BaseGraph):
         """
         super().add_node(
             id=circle_id,
-            label="",
-            width=str(1),
-            height=str(1),
+            label=" ",
             shape="circle",
             style="filled",
             fillcolor="#FDFFF5",

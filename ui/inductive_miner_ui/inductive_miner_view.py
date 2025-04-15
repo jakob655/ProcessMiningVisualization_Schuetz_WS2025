@@ -35,3 +35,11 @@ class InductiveMinerView(BaseAlgorithmView):
             All activities with a frequency that is lower than treshold * max_event_frequency will be removed.
             The higher the value, the less activities will be included in the graph.""",
         )
+
+        number_input_slider(
+            label="SPM Threshold",
+            min_value=sidebar_values["spm_threshold"][0],
+            max_value=sidebar_values["spm_threshold"][1],
+            key="spm_threshold",
+            help="Filter nodes based on the SPM metric threshold.",
+        )

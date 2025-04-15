@@ -94,11 +94,11 @@ class AlphaMining(BaseMining):
         self.graph.add_end_node()
 
         self.spm_threshold = spm_threshold
-        self.filtered_events = self.get_spm_filtered_events()
-        self.filtered_log = self.get_spm_filtered_log()
+        self.spm_filtered_events = self.get_spm_filtered_events()
+        self.spm_filtered_log = self.get_spm_filtered_log()
 
 
-        if not self.filtered_events:
+        if not self.spm_filtered_events:
             # only show start and end if nothing to visualize
             return
 
@@ -108,8 +108,11 @@ class AlphaMining(BaseMining):
 
         self.__calculate_model_state()
 
+        # Add nodes (events to draw combined with start and end nodes)
+        nodes_to_draw = self.__events_to_draw().union(self.start_nodes, self.end_nodes)
+
         # Add nodes (either all filtered or only relevant via yl_set)
-        for node in self.__events_to_draw() or self.filtered_events:
+        for node in nodes_to_draw:
             self.graph.add_node(str(node))
 
         # Connect the start node to the empty circle for start nodes
@@ -166,10 +169,10 @@ class AlphaMining(BaseMining):
                         self.graph.create_edge(circle_id2, str(B[0]), penwidth=0.1)
 
         # Connect the empty circle to the actual start and end nodes
-        for node in self.start_nodes.intersection(self.filtered_events):
+        for node in self.start_nodes.intersection(self.spm_filtered_events):
             self.graph.create_edge("empty_circle_start", str(node), penwidth=0.1)
 
-        for node in self.end_nodes.intersection(self.filtered_events):
+        for node in self.end_nodes.intersection(self.spm_filtered_events):
             self.graph.create_edge(str(node), "empty_circle_end", penwidth=0.1)
 
         # Connect the empty circle to the end node
@@ -186,7 +189,7 @@ class AlphaMining(BaseMining):
     # returns list converted to set to avoid duplicates
     def _calculate_direct_succession(self):
         direct_succession = []
-        for case in self.filtered_log:
+        for case in self.spm_filtered_log:
             for i in range(len(case) - 1):
                 x = case[i]
                 y = case[i + 1]
@@ -310,8 +313,8 @@ class AlphaMining(BaseMining):
         self.direct_succession_set = self._calculate_direct_succession()
         self.causality_set = self._calculate_causality(self.direct_succession_set)
         self.parallel_set = self._calculate_parallel(self.direct_succession_set)
-        self.choice_set = self._calculate_choice(self.filtered_events, self.causality_set, self.parallel_set)
-        self.xl_set = self.generate_set_xl(self.filtered_events, self.choice_set, self.causality_set)
+        self.choice_set = self._calculate_choice(self.events, self.causality_set, self.parallel_set)
+        self.xl_set = self.generate_set_xl(self.events, self.choice_set, self.causality_set)
         self.yl_set = self.generate_set_yl(self.xl_set, self.parallel_set)
         self.start_nodes = self._get_start_nodes()
         self.end_nodes = self._get_end_nodes()

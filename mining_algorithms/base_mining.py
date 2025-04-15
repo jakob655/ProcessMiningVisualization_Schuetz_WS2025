@@ -1,6 +1,7 @@
 import numpy as np
 from mining_algorithms.mining_interface import MiningInterface
 from logger import get_logger
+from collections import OrderedDict
 
 
 class BaseMining(MiningInterface):
@@ -40,11 +41,11 @@ class BaseMining(MiningInterface):
         self.logger.debug(f"End Nodes: {self.end_nodes}")
 
         self.spm_threshold = 0.0
-        self.filtered_events = self.get_spm_filtered_events()
-        self.filtered_log = self.get_spm_filtered_log()
+        self.spm_filtered_events = self.get_spm_filtered_events()
+        self.spm_filtered_log = self.get_spm_filtered_log()
 
-        self.logger.debug(f"Filtered Events: {self.filtered_events}")
-        self.logger.debug(f"Filtered Log: {self.filtered_log}")
+        self.logger.debug(f"Filtered Events: {self.spm_filtered_events}")
+        self.logger.debug(f"Filtered Log: {self.spm_filtered_log}")
 
     def __filter_out_all_events(self) -> tuple[list[str], dict[str, int]]:
         """create a list of all events and a dictionary of all events with their frequencies
@@ -310,5 +311,5 @@ class BaseMining(MiningInterface):
         return {
             filtered_trace: freq
             for trace, freq in self.log.items()
-            if (filtered_trace := tuple(e for e in trace if e in self.filtered_events))
+            if (filtered_trace := tuple(e for e in trace if e in self.spm_filtered_events))
         }

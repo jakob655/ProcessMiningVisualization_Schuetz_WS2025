@@ -51,13 +51,17 @@ class InductiveMinerController(BaseAlgorithmController):
                 self.mining_model.get_activity_threshold()
             )
 
+        if "spm_threshold" not in st.session_state:
+            st.session_state.spm_threshold = self.mining_model.get_spm_threshold()
+
         # set instance variables from session state
         self.traces_threshold = st.session_state.traces_threshold
         self.activity_threshold = st.session_state.activity_threshold
+        self.spm_threshold = st.session_state.spm_threshold
 
     def perform_mining(self) -> None:
         """Performs the mining of the Inductive Miner algorithm."""
-        self.mining_model.generate_graph(self.activity_threshold, self.traces_threshold)
+        self.mining_model.generate_graph(self.activity_threshold, self.traces_threshold, self.spm_threshold)
 
     def have_parameters_changed(self) -> bool:
         """Checks if the algorithm parameters have changed.
@@ -70,6 +74,7 @@ class InductiveMinerController(BaseAlgorithmController):
         return (
             self.mining_model.get_activity_threshold() != self.activity_threshold
             or self.mining_model.get_traces_threshold() != self.traces_threshold
+            or self.mining_model.get_spm_threshold() != self.spm_threshold
         )
 
     def get_sidebar_values(self) -> dict[str, tuple[int | float, int | float]]:
@@ -84,6 +89,7 @@ class InductiveMinerController(BaseAlgorithmController):
         sidebar_values = {
             "traces_threshold": (0.0, 1.0),
             "activity_threshold": (0.0, 1.0),
+            "spm_threshold": (0.0, 1.0)
         }
 
         return sidebar_values
