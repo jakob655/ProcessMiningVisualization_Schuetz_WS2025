@@ -44,8 +44,11 @@ class FuzzyMinerController(BaseAlgorithmController):
         If the parameters are not set in the session state, the default values are used.
         """
         # set session state from instance variables if not set
-        if "significance" not in st.session_state:
-            st.session_state.significance = self.mining_model.get_significance()
+        if "unary_significance" not in st.session_state:
+            st.session_state.unary_significance = self.mining_model.get_unary_significance()
+
+        if "binary_significance" not in st.session_state:
+            st.session_state.binary_significance = self.mining_model.get_binary_significance()
 
         if "correlation" not in st.session_state:
             st.session_state.correlation = self.mining_model.get_correlation()
@@ -60,7 +63,8 @@ class FuzzyMinerController(BaseAlgorithmController):
             st.session_state.spm_threshold = self.mining_model.get_spm_threshold()
 
         # set instance variables from session state
-        self.significance = st.session_state.significance
+        self.unary_significance = st.session_state.unary_significance
+        self.binary_significance = st.session_state.binary_significance
         self.correlation = st.session_state.correlation
         self.edge_cutoff = st.session_state.edge_cutoff
         self.utility_ratio = st.session_state.utility_ratio
@@ -69,7 +73,7 @@ class FuzzyMinerController(BaseAlgorithmController):
     def perform_mining(self) -> None:
         """Performs the mining of the Fuzzy Miner algorithm."""
         self.mining_model.create_graph_with_graphviz(
-            self.significance, self.correlation, self.edge_cutoff, self.utility_ratio, self.spm_threshold
+            self.unary_significance, self.binary_significance, self.correlation, self.edge_cutoff, self.utility_ratio, self.spm_threshold
         )
 
     def have_parameters_changed(self) -> bool:
@@ -81,7 +85,8 @@ class FuzzyMinerController(BaseAlgorithmController):
             True if the algorithm parameters have changed, False otherwise.
         """
         return (
-            self.mining_model.get_significance() != self.significance
+            self.mining_model.get_unary_significance() != self.unary_significance
+            or self.mining_model.get_binary_significance() != self.binary_significance
             or self.mining_model.get_correlation() != self.correlation
             or self.mining_model.get_edge_cutoff() != self.edge_cutoff
             or self.mining_model.get_utility_ratio() != self.utility_ratio
@@ -99,7 +104,8 @@ class FuzzyMinerController(BaseAlgorithmController):
         """
 
         sidebar_values = {
-            "significance": (0.0, 1.0),
+            "unary_significance": (0.0, 1.0),
+            "binary_significance": (0.0, 1.0),
             "correlation": (0.0, 1.0),
             "edge_cutoff": (0.0, 1.0),
             "utility_ratio": (0.0, 1.0),

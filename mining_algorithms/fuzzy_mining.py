@@ -19,7 +19,8 @@ class FuzzyMining(BaseMining):
         self.clustered_nodes = None
         self.sign_dict = None
 
-        self.significance = 0.0
+        self.unary_significance = 0.0
+        self.binary_significance = 0.0
         self.correlation = 0.0
         self.edge_cutoff = 0.0
         self.utility_ratio = 0.0
@@ -29,9 +30,10 @@ class FuzzyMining(BaseMining):
         self.cluster_id_mapping = None
 
     def create_graph_with_graphviz(
-        self, significance, correlation, edge_cutoff, utility_ratio, spm_threshold
+        self, unary_significance, binary_significance, correlation, edge_cutoff, utility_ratio, spm_threshold
     ):
-        self.significance = significance
+        self.unary_significance = unary_significance
+        self.binary_significance = binary_significance
         self.correlation = correlation
         self.edge_cutoff = edge_cutoff
         self.utility_ratio = utility_ratio
@@ -53,7 +55,8 @@ class FuzzyMining(BaseMining):
 
         # self.correlation_of_nodes = self.__calculate_correlation_dependency_matrix(correlation)
 
-        self.logger.debug("Significance: " + str(significance))
+        self.logger.debug("Unary Significance: " + str(unary_significance))
+        self.logger.debug("Binary Significance: " + str(binary_significance))
         self.logger.debug("Succession: " + "\n" + str(self.succession_matrix))
 
         # 1 Rule remove less significant and less correlated nodes
@@ -62,7 +65,7 @@ class FuzzyMining(BaseMining):
                 self.spm_filtered_events,
                 self.correlation_of_nodes,
                 self.node_significance_matrix,
-                significance,
+                unary_significance,
             )
         )
 
@@ -98,7 +101,7 @@ class FuzzyMining(BaseMining):
             nodes_after_first_rule,
             self.corr_after_first_rule,
             self.sign_after_first_rule,
-            significance,
+            unary_significance,
         )
         self.logger.debug("Clustered nodes: " + str(clustered_nodes_after_sec_rule))
         self.list_of_clustered_nodes = self.__convert_clustered_nodes_to_list(
@@ -250,6 +253,9 @@ class FuzzyMining(BaseMining):
                     sign_after_first_rule[i][j] == -1
                     or corr_after_first_rule[i][j] == -1
                 ):
+                    continue
+
+                if sign_after_first_rule[i][j] < self.binary_significance:
                     continue
 
                 # if not clustered and not removed check for edge filtering
@@ -614,7 +620,7 @@ class FuzzyMining(BaseMining):
         nodes_after_first_rule,
         corr_after_first_rule,
         sign_after_first_rule,
-        significance,
+        unary_significance,
     ):
         main_cluster_list = []
         less_sign_nodes = []
@@ -622,7 +628,7 @@ class FuzzyMining(BaseMining):
         for a in range(len(self.spm_filtered_events)):
             # 1. Find less significant nodes
             if (
-                sign_after_first_rule[a][0] < significance
+                sign_after_first_rule[a][0] < unary_significance
                 and sign_after_first_rule[a][0] != -1
             ):
                 less_sign_nodes.append(self.spm_filtered_events[a])
@@ -704,7 +710,7 @@ class FuzzyMining(BaseMining):
 
     # __cluster_based_on_significance_dependency
     def __calculate_first_rule(
-        self, events, correlation_of_nodes, significance_of_nodes, significance
+        self, events, correlation_of_nodes, significance_of_nodes, unary_significance
     ):
         value_to_replace = -1
         indices_to_replace = set()
@@ -723,7 +729,7 @@ class FuzzyMining(BaseMining):
                 if (
                     correlation_of_nodes[i][j] < self.minimum_correlation
                     and correlation_of_nodes[j][i] < self.minimum_correlation
-                    and significance_of_nodes[i][j] < significance
+                    and significance_of_nodes[i][j] < unary_significance
                 ):
                     counter += 1
                 # if correlation_of_nodes[i][j] < self.minimum_correlation:
@@ -781,8 +787,11 @@ class FuzzyMining(BaseMining):
         ret_matrix = ret_matrix + significance_column
         return ret_matrix
 
-    def get_significance(self):
-        return self.significance
+    def get_unary_significance(self):
+        return self.unary_significance
+
+    def get_binary_significance(self):
+        return self.binary_significance
 
     def get_correlation(self):
         return self.correlation

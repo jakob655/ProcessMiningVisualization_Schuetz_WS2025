@@ -27,14 +27,14 @@ class FuzzyMinerView(BaseAlgorithmView):
             help="Filter nodes based on the SPM metric threshold.",
         )
 
-        st.write("Significance Cutoff")
+        st.write("Node Filtering")
 
         number_input_slider(
-            label="Significance",
-            min_value=sidebar_values["significance"][0],
-            max_value=sidebar_values["significance"][1],
-            key="significance",
-            help="Significance measures the frequency of events that are observed more frequently and are therefore considered more significant.",
+            label="Unary Significance",
+            min_value=sidebar_values["unary_significance"][0],
+            max_value=sidebar_values["unary_significance"][1],
+            key="unary_significance",
+            help="Filters nodes by how frequently they appear in the log. Nodes with a significance below this threshold are considered less important and are subject to removal or clustering.",
         )
 
         number_input_slider(
@@ -48,11 +48,19 @@ class FuzzyMinerView(BaseAlgorithmView):
         st.write("Edge filtering")
 
         number_input_slider(
+            label="Binary Significance",
+            min_value=sidebar_values["binary_significance"][0],
+            max_value=sidebar_values["binary_significance"][1],
+            key="binary_significance",
+            help="Filters edges based on how significant their transitions are. Only edges with a binary significance above this threshold will be considered in the edge filtering and utility computation",
+        )
+
+        number_input_slider(
             label="Edge Cutoff",
             min_value=sidebar_values["edge_cutoff"][0],
             max_value=sidebar_values["edge_cutoff"][1],
             key="edge_cutoff",
-            help="The edge cutoff parameter determines the aggressiviness of the algorithm, i.e. the higher its value, the more likely the algorithm remove edges.",
+            help="The edge cutoff parameter determines the aggressiveness of the algorithm, i.e. the higher its value, the more likely the algorithm remove edges.",
         )
 
         number_input_slider(

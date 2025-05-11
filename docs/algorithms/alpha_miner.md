@@ -71,6 +71,14 @@ The Alpha Miner works by analyzing traces (sequences of events) in the event log
 
 ---
 
+## Metrics/Filtering
+### SPM Filter (Search Process Quality Metric)
+The SPM filter simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the spm metric, which balances complexity and common behavior. This abstraction helps generate clearer, more interpretable models which is especially useful for user-driven processes like search behavior.
+
+The SPM value ranges from 0.0 to 1.0 and reflects the semantic quality of a node. It defines the threshold below which nodes are considered low-quality due to low frequency or high complexity, and may be removed for abstraction.
+
+---
+
 ## Limitations
 
 - **Assumes Perfect Data**: The algorithm does not handle noise or incomplete data effectively.
