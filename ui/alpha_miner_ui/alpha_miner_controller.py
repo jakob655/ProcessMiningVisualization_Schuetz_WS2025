@@ -38,18 +38,10 @@ class AlphaMinerController(BaseAlgorithmController):
         return "Alpha Mining"
 
     def process_algorithm_parameters(self):
-        """Processes the algorithm parameters from the session state. The parameters are set to the instance variables.
-        If the parameters are not set in the session state, the default values are used.
+        """Processes the algorithm parameters from the session state.
+        Calls the base implementation for shared filters and initializes additional Alpha Miner-specific parameters.
         """
-        if "spm_threshold" not in st.session_state:
-            st.session_state.spm_threshold = self.mining_model.get_spm_threshold()
-
-        # set instance variable from session state
-        self.spm_threshold = st.session_state.spm_threshold
-
-    def perform_mining(self) -> None:
-        """Performs the mining of the Alpha Miner algorithm."""
-        self.mining_model.draw_graph(self.spm_threshold)
+        super().process_algorithm_parameters()
 
     def have_parameters_changed(self) -> bool:
         """Checks if the algorithm parameters have changed.
@@ -57,21 +49,21 @@ class AlphaMinerController(BaseAlgorithmController):
         Returns
         -------
         bool
-            True if the algorithm parameters have changed, False otherwise.
+            True if any of the algorithm parameters have changed, False otherwise.
         """
-        return self.mining_model.get_spm_threshold() != self.spm_threshold
+        return super().have_parameters_changed()
 
-    def get_sidebar_values(self) -> dict[str, tuple[int | float, int | float]]:
+    def get_sidebar_values(self) -> dict[str, tuple[float, float]]:
         """Returns the sidebar values for the Alpha Miner algorithm.
 
         Returns
         -------
-        dict[str, tuple[int | float, int | float]]
+        dict[str, tuple[float, float]]
             A dictionary containing the minimum and maximum values for the sidebar sliders.
             The keys of the dictionary are equal to the keys of the sliders.
         """
-        sidebar_values = {
-           "spm_threshold": (0.0, 1.0),
-        }
+        return super().get_sidebar_values()
 
-        return sidebar_values
+    def perform_mining(self) -> None:
+        """Performs the mining of the Alpha Miner algorithm using the current filter parameters."""
+        super().perform_mining()

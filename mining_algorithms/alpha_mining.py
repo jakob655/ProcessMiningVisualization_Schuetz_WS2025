@@ -9,7 +9,7 @@ class AlphaMining(BaseMining):
         super().__init__(log)
         self.logger = get_logger("AlphaMining")
 
-        self.__calculate_model_state()
+        self._calculate_filtered_model_state()
 
     # This implementation follows the steps outlined in the lecture by Professor Wil van der Aalst on process mining.
     # The lecture video can be found at: https://www.youtube.com/watch?v=ATBEEEDxHTQ
@@ -84,39 +84,49 @@ class AlphaMining(BaseMining):
         return yl_set
 
     # Step 6
-    def draw_graph(self, spm_threshold):
+    def generate_graph(self, spm_threshold, node_freq_threshold, edge_freq_threshold):
         self.graph = AlphaGraph()
 
-        # Add the start node
         self.graph.add_start_node()
 
-        # Add the end node
         self.graph.add_end_node()
 
         self.spm_threshold = spm_threshold
-        self.spm_filtered_events = self.get_spm_filtered_events()
-        self.spm_filtered_log = self.get_spm_filtered_log()
+        self.node_freq_threshold = node_freq_threshold
+        self.edge_freq_threshold = edge_freq_threshold
 
+        self.recalculate_model_filters()
 
-        if not self.spm_filtered_events:
-            # only show start and end if nothing to visualize
+        if not self.node_frequency_filtered_events:
+            # Only show start and end if nothing to visualize
+            self.graph.create_edge("Start", "End", penwidth=0.1)
             return
 
-        # Add empty circles for start and end
         self.graph.add_empty_circle("empty_circle_start")
         self.graph.add_empty_circle("empty_circle_end")
 
-        self.__calculate_model_state()
+        self.graph.create_edge("Start", "empty_circle_start", penwidth=0.1)
+
+        self._calculate_filtered_model_state()
+
+        if not self.yl_set:
+            # If no transitions (yl_set) were found in the model, but there are still start_nodes present,
+            # treat each start_node (also end_node in this case) as a standalone unit from Start to End
+            for start_end_node in self.start_nodes:
+                self.graph.add_node(str(start_end_node))
+                self.graph.create_edge("empty_circle_start", str(start_end_node), penwidth=0.1)
+                self.graph.create_edge(str(start_end_node), "empty_circle_end", penwidth=0.1)
+            self.graph.create_edge("empty_circle_end", "End", penwidth=0.1)
+            return
 
         # Add nodes (events to draw combined with start and end nodes)
-        nodes_to_draw = self.__events_to_draw().union(self.start_nodes, self.end_nodes)
+        nodes_to_draw = self.__events_to_draw().union(
+            self.start_nodes.intersection(self.node_frequency_filtered_events),
+            self.end_nodes.intersection(self.node_frequency_filtered_events)
+        )
 
-        # Add nodes (either all filtered or only relevant via yl_set)
         for node in nodes_to_draw:
             self.graph.add_node(str(node))
-
-        # Connect the start node to the empty circle for start nodes
-        self.graph.create_edge("Start", "empty_circle_start", penwidth=0.1)
 
         # Add and connect nodes based on yl_set logic
         for _set in self.yl_set:
@@ -124,59 +134,114 @@ class AlphaMining(BaseMining):
                 A, B = _set[0], _set[1]
                 circle_id = f"{A}_{B}"
 
+                # Calculate dynamic sources and targets
+                valid_sources = [a for a in A if any(self.filter_edge(a, b) for b in B)]
+                valid_targets = [b for b in B if any(self.filter_edge(a, b) for a in A)]
+
+                if not valid_sources or not valid_targets:
+                    continue
+
                 # Case 1: Single-to-Single
-                if len(A) == 1 and len(B) == 1:
-                    self.graph.add_empty_circle(circle_id)
-                    self.graph.create_edge(str(A[0]), circle_id, penwidth=0.1)
-                    self.graph.create_edge(circle_id, str(B[0]), penwidth=0.1)
+                if len(valid_sources) == 1 and len(valid_targets) == 1:
+                    a, b = valid_sources[0], valid_targets[0]
+                    self.logger.debug(f"[Single-to-Single] {a} -> {b}")
+                    circle_id = f"{a}_{b}"
+                    self.create_safe_node(circle_id)
+                    self.create_safe_edge(str(a), circle_id)
+                    self.create_safe_edge(circle_id, str(b))
 
                 # Case 2: Single-to-Multiple
-                elif len(A) == 1 and len(B) == 2:
-                    if self.__is_set_in_choice(B, self.choice_set):
-                        # XOR-split
-                        self.graph.add_empty_circle(circle_id)
-                        self.graph.create_edge(str(A[0]), circle_id, penwidth=0.1)
-                        for event in B:
-                            self.graph.create_edge(circle_id, str(event), penwidth=0.1)
-                    elif self.__is_set_in_parallel(B, self.parallel_set):
-                        # AND-split (two separate circles)
-                        circle_id1 = f"{A}_{B}_1"
-                        circle_id2 = f"{B}_{A}_2"
-                        self.graph.add_empty_circle(circle_id1)
-                        self.graph.add_empty_circle(circle_id2)
-                        self.graph.create_edge(str(A[0]), circle_id1, penwidth=0.1)
-                        self.graph.create_edge(str(A[0]), circle_id2, penwidth=0.1)
-                        self.graph.create_edge(circle_id1, str(B[0]), penwidth=0.1)
-                        self.graph.create_edge(circle_id2, str(B[1]), penwidth=0.1)
+                elif len(valid_sources) == 1:
+                    a = valid_sources[0]
+                    self.logger.debug(f"[Single-to-Multiple] A={A}, valid_targets={valid_targets}")
+                    if len(valid_targets) == 1:
+                        b = valid_targets[0]
+                        circle_id = f"{a}_{b}"
+                        self.create_safe_node(circle_id)
+                        self.create_safe_edge(str(a), circle_id)
+                        self.create_safe_edge(circle_id, str(b))
+                    elif self.__is_set_in_choice(valid_targets, self.choice_set):
+                        self.create_safe_node(circle_id)
+                        self.create_safe_edge(str(a), circle_id)
+                        for b in valid_targets:
+                            self.create_safe_edge(circle_id, str(b))
+                    elif self.__is_set_in_parallel(valid_targets, self.parallel_set):
+                        for b in valid_targets:
+                            cid = f"{a}_{b}"
+                            self.create_safe_node(cid)
+                            self.create_safe_edge(str(a), cid)
+                            self.create_safe_edge(cid, str(b))
 
                 # Case 3: Multiple-to-Single
-                elif len(A) == 2 and len(B) == 1:
-                    if self.__is_set_in_choice(A, self.choice_set):
-                        # XOR-join
-                        self.graph.add_empty_circle(circle_id)
-                        for event in A:
-                            self.graph.create_edge(str(event), circle_id, penwidth=0.1)
-                        self.graph.create_edge(circle_id, str(B[0]), penwidth=0.1)
-                    elif self.__is_set_in_parallel(A, self.parallel_set):
-                        # AND-join (two separate circles)
-                        circle_id1 = f"{A}_{B}_1"
-                        circle_id2 = f"{B}_{A}_2"
-                        self.graph.add_empty_circle(circle_id1)
-                        self.graph.add_empty_circle(circle_id2)
-                        self.graph.create_edge(str(A[0]), circle_id1, penwidth=0.1)
-                        self.graph.create_edge(str(A[1]), circle_id2, penwidth=0.1)
-                        self.graph.create_edge(circle_id1, str(B[0]), penwidth=0.1)
-                        self.graph.create_edge(circle_id2, str(B[0]), penwidth=0.1)
+                elif len(valid_targets) == 1:
+                    b = valid_targets[0]
+                    self.logger.debug(f"[Multiple-to-Single] valid_sources={valid_sources}, B={B}")
+                    if len(valid_sources) == 1:
+                        a = valid_sources[0]
+                        circle_id = f"{a}_{b}"
+                        self.create_safe_node(circle_id)
+                        self.create_safe_edge(str(a), circle_id)
+                        self.create_safe_edge(circle_id, str(b))
+                    elif self.__is_set_in_choice(valid_sources, self.choice_set):
+                        self.create_safe_node(circle_id)
+                        for a in valid_sources:
+                            self.create_safe_edge(str(a), circle_id)
+                        self.create_safe_edge(circle_id, str(b))
+                    elif self.__is_set_in_parallel(valid_sources, self.parallel_set):
+                        for a in valid_sources:
+                            cid = f"{a}_{b}"
+                            self.create_safe_node(cid)
+                            self.create_safe_edge(str(a), cid)
+                            self.create_safe_edge(cid, str(b))
+
+                # Case 4: Multiple-to-Multiple
+                else:
+                    self.logger.debug(
+                        f"[Multiple-to-Multiple] valid_sources={valid_sources}, valid_targets={valid_targets}")
+                    if self.__is_set_in_choice(valid_sources, self.choice_set) and self.__is_set_in_choice(
+                            valid_targets, self.choice_set):
+                        self.create_safe_node(circle_id)
+                        for a in valid_sources:
+                            self.create_safe_edge(str(a), circle_id)
+                        for b in valid_targets:
+                            self.create_safe_edge(circle_id, str(b))
+                    elif self.__is_set_in_parallel(valid_sources, self.parallel_set) and self.__is_set_in_parallel(
+                            valid_targets, self.parallel_set):
+                        for a in valid_sources:
+                            for b in valid_targets:
+                                cid = f"{a}_{b}"
+                                self.create_safe_node(cid)
+                                self.create_safe_edge(str(a), cid)
+                                self.create_safe_edge(cid, str(b))
+
+        # Ensure all remaining filtered nodes are connected to Start/End if not already handled
+        for node in nodes_to_draw:
+            has_in = any(self.filter_edge(a, node) for a in self.filtered_events)
+            has_out = any(self.filter_edge(node, b) for b in self.filtered_events)
+
+            if not has_in:
+                self.start_nodes.add(node)
+            if not has_out:
+                self.end_nodes.add(node)
 
         # Connect the empty circle to the actual start and end nodes
-        for node in self.start_nodes.intersection(self.spm_filtered_events):
+        for node in self.start_nodes.intersection(nodes_to_draw):
             self.graph.create_edge("empty_circle_start", str(node), penwidth=0.1)
 
-        for node in self.end_nodes.intersection(self.spm_filtered_events):
+        for node in self.end_nodes.intersection(nodes_to_draw):
             self.graph.create_edge(str(node), "empty_circle_end", penwidth=0.1)
 
         # Connect the empty circle to the end node
         self.graph.create_edge("empty_circle_end", "End", penwidth=0.1)
+
+        if not self.has_path(self.graph.adjacency, "Start", "End"):
+            self.graph = AlphaGraph()
+            self.graph.add_start_node()
+            self.graph.add_end_node()
+            self.create_safe_edge("Start", "End")
+            return
+
+
 
     # ALPHA MINER ALGORITHM IMPLEMENTATION END
     ####################################################################################################################
@@ -189,7 +254,7 @@ class AlphaMining(BaseMining):
     # returns list converted to set to avoid duplicates
     def _calculate_direct_succession(self):
         direct_succession = []
-        for case in self.spm_filtered_log:
+        for case in self.node_frequency_filtered_log:
             for i in range(len(case) - 1):
                 x = case[i]
                 y = case[i + 1]
@@ -246,6 +311,14 @@ class AlphaMining(BaseMining):
 
     ####################################################################################################################
     # ALPHA MINER ALGORITHM HELPER METHODS BEGIN
+
+    def create_safe_edge(self, from_node, to_node, penwidth=0.1):
+        if not self.graph.contains_edge(from_node, to_node):
+            self.graph.create_edge(from_node, to_node, penwidth=penwidth)
+
+    def create_safe_node(self, node_id):
+        if not self.graph.contains_node(node_id):
+            self.graph.add_empty_circle(node_id)
 
     # searches for a given set if the given set is found in choice set
     # returns boolean
@@ -309,15 +382,13 @@ class AlphaMining(BaseMining):
                     events_to_draw.append(node)
         return set(events_to_draw)
 
-    def __calculate_model_state(self):
+    def _calculate_filtered_model_state(self):
         self.direct_succession_set = self._calculate_direct_succession()
         self.causality_set = self._calculate_causality(self.direct_succession_set)
         self.parallel_set = self._calculate_parallel(self.direct_succession_set)
-        self.choice_set = self._calculate_choice(self.events, self.causality_set, self.parallel_set)
-        self.xl_set = self.generate_set_xl(self.events, self.choice_set, self.causality_set)
+        self.choice_set = self._calculate_choice(self.filtered_events, self.causality_set, self.parallel_set)
+        self.xl_set = self.generate_set_xl(self.filtered_events, self.choice_set, self.causality_set)
         self.yl_set = self.generate_set_yl(self.xl_set, self.parallel_set)
-        self.start_nodes = self._get_start_nodes()
-        self.end_nodes = self._get_end_nodes()
         self.footprint = self.generate_footprint()
 
     # ALPHA MINER ALGORITHM HELPER METHODS END

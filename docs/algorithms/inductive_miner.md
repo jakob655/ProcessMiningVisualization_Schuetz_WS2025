@@ -64,7 +64,7 @@ The last fall through is the flower model. This is a process tree, with the loop
 
 The algorithm uses three metrics: the **activity threshold**, the **traces threshold**, and the **spm metric**.
 
-The **SPM filter** simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the `spm` metric, which balances structural complexity (node degree) and behavioral relevance (frequency). This helps generate clearer, more interpretable models—especially useful for user-driven or search-oriented event logs.
+The **SPM filter** simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the **spm metric**, which balances structural complexity (node degree) and behavioral relevance (frequency). This helps generate clearer, more interpretable models. Especially useful for user-driven or search-oriented event logs.
 
 The **activity threshold** describes the frequency of an event in relation to the most frequent event. It is calculated by dividing the frequency of the event by the maximum frequency across all events.
 

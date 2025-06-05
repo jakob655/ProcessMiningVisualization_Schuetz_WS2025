@@ -1,5 +1,5 @@
 import streamlit as st
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from ui.base_ui.base_controller import BaseController
 from transformations.dataframe_transformations import DataframeTransformations
 from components.buttons import to_home
@@ -8,7 +8,7 @@ from exceptions.type_exceptions import TypeIsNoneException
 from logger import get_logger
 
 
-class BaseAlgorithmController(BaseController):
+class BaseAlgorithmController(BaseController, ABC):
     """Base class for the algorithm controllers. It provides the basic methods for the algorithm controllers."""
 
     def __init__(
@@ -25,6 +25,9 @@ class BaseAlgorithmController(BaseController):
         dataframe_transformations : DataframeTransformations, optional
             The class for the dataframe transformations. If None is passed, a new instance is created, by default None
         """
+        self.spm_threshold = None
+        self.node_frequency_threshold = None
+        self.edge_frequency_threshold = None
         self.logger = get_logger("BaseAlgorithmController")
 
         self.mining_model = None
@@ -41,63 +44,71 @@ class BaseAlgorithmController(BaseController):
         self.mining_model_class = mining_model_class
         super().__init__(views)
 
-    @abstractmethod
-    def perform_mining(self) -> None:
-        """Performs the mining of the algorithm. This method must be implemented by the subclass.
+    def perform_mining(self, **kwargs) -> None:
+        """Performs the mining of the algorithm using the default filter parameters.
+        Can optionally be overridden by subclasses to customize parameter handling.
 
-        Raises
-        ------
-        NotImplementedError
-            If the method is not implemented by the subclass.
+        Passes the SPM threshold, node frequency, and edge frequency to the model's
+        draw_graph methods. Additional parameters can be provided via kwargs.
         """
-        raise NotImplementedError("perform_mining() method not implemented")
+        params = {
+            "spm_threshold": self.spm_threshold,
+            "node_freq_threshold": self.node_frequency_threshold,
+            "edge_freq_threshold": self.edge_frequency_threshold
+        }
+        params.update(kwargs)
 
-    @abstractmethod
+        self.mining_model.generate_graph(**params)
+
     def process_algorithm_parameters(self):
-        """Processes the algorithm parameters from the streamlit session state. Either reads the parameters from the session state or sets default values that are used for the mining.
-        This method must be implemented by the subclass.
+        """Processes the algorithm parameters from the session state. Initializes shared filter
+        parameters for node and edge filtering if they are not yet defined in the session state.
 
-        Raises
-        ------
-        NotImplementedError
-            If the method is not implemented by the subclass.
+        This method can be extended or overridden by subclasses to read or define additional parameters.
         """
-        raise NotImplementedError(
-            "process_algorithm_parameters() method not implemented"
-        )
+        if "spm_threshold" not in st.session_state:
+            st.session_state.spm_threshold = self.mining_model.get_spm_threshold()
+        if "node_frequency_threshold" not in st.session_state:
+            st.session_state.node_frequency_threshold = self.mining_model.get_node_frequency_threshold()
+        if "edge_frequency_threshold" not in st.session_state:
+            st.session_state.edge_frequency_threshold = self.mining_model.get_edge_frequency_threshold()
 
-    @abstractmethod
+        self.spm_threshold = st.session_state.spm_threshold
+        self.node_frequency_threshold = st.session_state.node_frequency_threshold
+        self.edge_frequency_threshold = st.session_state.edge_frequency_threshold
+
     def have_parameters_changed(self) -> bool:
-        """Checks if the algorithm parameters have changed. This method must be implemented by the subclass.
+        """Checks if the shared algorithm parameters (node and edge filtering sliders)
+        have changed compared to the current mining model.
 
         Returns
         -------
         bool
-            True if the algorithm parameters have changed, False otherwise.
-
-        Raises
-        ------
-        NotImplementedError
-            If the method is not implemented by the subclass.
+            True if any of the filtering parameters have changed, False otherwise.
         """
-        raise NotImplementedError("have_parameters_changed() method not implemented")
+        return (
+                self.mining_model.get_spm_threshold() != self.spm_threshold or
+                self.mining_model.get_node_frequency_threshold() != self.node_frequency_threshold or
+                self.mining_model.get_edge_frequency_threshold() != self.edge_frequency_threshold
+        )
 
-    @abstractmethod
-    def get_sidebar_values(self) -> dict[str, any]:
-        """Returns the values for the sidebar elements. Can be used to set minimum and maximum values for the sidebar sliders, that could depend on the model.
-        This method must be implemented by the subclass.
+    def get_sidebar_values(self) -> dict[str, tuple[float, float]]:
+        """Returns the values for the shared sidebar sliders. Can be used to define the minimum
+        and maximum values for the SPM, node frequency, and edge frequency filters.
+
+        This method can be overridden by subclasses to customize the slider bounds.
 
         Returns
         -------
-        dict[str, any]
-            A dictionary containing the values for the sidebar elements. The keys of the dictionary are equal to the keys of the sliders.
-
-        Raises
-        ------
-        NotImplementedError
-            If the method is not implemented by the subclass.
+        dict[str, tuple[float, float]]
+            A dictionary containing the min and max values for each shared sidebar slider.
+            Keys must match the corresponding Streamlit session_state keys.
         """
-        raise NotImplementedError("get_sidebar_values() method not implemented")
+        return {
+            "spm_threshold": (0.0, 1.0),
+            "node_frequency_threshold": (0.0, 1.0),
+            "edge_frequency_threshold": (0.0, 1.0),
+        }
 
     def is_correct_model_type(self, model) -> bool:
         """Checks if the model is of the correct type.

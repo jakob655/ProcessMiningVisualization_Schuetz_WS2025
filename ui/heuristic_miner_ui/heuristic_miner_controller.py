@@ -21,6 +21,9 @@ class HeuristicMinerController(BaseAlgorithmController):
         dataframe_transformations : DataframeTransformations, optional
             The class for the dataframe transformations. If None is passed, a new instance is created, by default None
         """
+        self.threshold = None
+        self.frequency = None
+
         if views is None:
             views = [HeuristicMinerView()]
 
@@ -43,6 +46,7 @@ class HeuristicMinerController(BaseAlgorithmController):
         """Processes the algorithm parameters from the session state. The parameters are set to the instance variables.
         If the parameters are not set in the session state, the default values are used.
         """
+        super().process_algorithm_parameters()
         # set session state from instance variables if not set
         if "threshold" not in st.session_state:
             st.session_state.threshold = self.mining_model.get_threshold()
@@ -50,19 +54,13 @@ class HeuristicMinerController(BaseAlgorithmController):
         if "frequency" not in st.session_state:
             st.session_state.frequency = self.mining_model.get_min_frequency()
 
-        if "spm_threshold" not in st.session_state:
-            st.session_state.spm_threshold = self.mining_model.get_spm_threshold()
-
         # set instance variables from session state
         self.threshold = st.session_state.threshold
         self.frequency = st.session_state.frequency
-        self.spm_threshold = st.session_state.spm_threshold
 
     def perform_mining(self) -> None:
         """Performs the mining of the Heuristic Miner algorithm."""
-        self.mining_model.create_dependency_graph_with_graphviz(
-            self.threshold, self.frequency, self.spm_threshold
-        )
+        super().perform_mining(dependency_threshold=self.threshold, min_frequency=self.frequency)
 
     def have_parameters_changed(self) -> bool:
         """Checks if the algorithm parameters have changed.
@@ -73,9 +71,9 @@ class HeuristicMinerController(BaseAlgorithmController):
             True if the algorithm parameters have changed, False otherwise.
         """
         return (
-            self.mining_model.get_threshold() != self.threshold
-            or self.mining_model.get_min_frequency() != self.frequency
-            or self.mining_model.get_spm_threshold() != self.spm_threshold
+                super().have_parameters_changed()
+                or self.mining_model.get_threshold() != self.threshold
+                or self.mining_model.get_min_frequency() != self.frequency
         )
 
     def get_sidebar_values(self) -> dict[str, tuple[int | float, int | float]]:
@@ -87,10 +85,9 @@ class HeuristicMinerController(BaseAlgorithmController):
             A dictionary containing the minimum and maximum values for the sidebar sliders.
             The keys of the dictionary are equal to the keys of the sliders.
         """
-        sidebar_values = {
-            "frequency": (1, self.mining_model.get_max_frequency()),
+        sidebar_values = super().get_sidebar_values()
+        sidebar_values.update({
+            "frequency": (0, self.mining_model.get_max_frequency()),
             "threshold": (0.0, 1.0),
-            "spm_threshold": (0.0, 1.0),
-        }
-
+        })
         return sidebar_values

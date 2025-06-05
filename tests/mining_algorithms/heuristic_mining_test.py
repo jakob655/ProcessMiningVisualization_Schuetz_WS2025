@@ -37,19 +37,19 @@ class TestHeuristic(unittest.TestCase):
 
     def test_create_dependency_graph_using_test_csv(self):
         print("-------------- Running test_csv ----------------")
-        self.__run_test_csv(0.5, 1, 0.5)
+        self.__run_test_csv(0.5, 1, 0.5, 0.0, 0.0)
         print("passed test 1")
-        self.__run_test_csv(0.1, 1, 0.5)
+        self.__run_test_csv(0.1, 1, 0.5, 0.2, 0.5)
         print("passed test 2")
-        self.__run_test_csv(0.9, 1, 0.5)
+        self.__run_test_csv(0.9, 1, 0.5, 0.5, 0.2)
         print("passed test 3")
-        self.__run_test_csv(0.5, 10, 0.5)
+        self.__run_test_csv(0.5, 10, 0.5, 1, 1)
         print("passed test 4")
         print("---------------- test_csv passed! ----------------")
 
     def test_create_dependency_graph_using_CallcenterExample(self):
         print("-------------- Running large CallcenterExample ----------------")
-        self.__run_CallcenterExample_csv(0.5, 1, 0.5)
+        self.__run_CallcenterExample_csv(0.5, 1, 0.5, 0.2, 0.2)
         print("---------------- CallcenterExample passed! ----------------")
 
     # read test cases that are txt files for testing
@@ -67,15 +67,18 @@ class TestHeuristic(unittest.TestCase):
         heuristicMining = HeuristicMining(
             cases_list_to_dict(self.__read_cases("tests/testlogs/" + filename + ".txt"))
         )
-        heuristicMining.create_dependency_graph_with_graphviz(0.5, 1, 0.5)
+        heuristicMining.generate_graph(0.5, 1, 0.5, 0.5, 1)
         self.__check_graph_integrity(heuristicMining.get_graph())
 
-    def __run_test_csv(self, threshold, min_freq, spm_threshold):
+    def __run_test_csv(self, spm_threshold, node_freq_threshold, edge_freq_threshold, dependency_threshold,
+                       min_frequency):
         heuristicMining = HeuristicMining(read("tests/testcsv/test_csv.csv"))
-        heuristicMining.create_dependency_graph_with_graphviz(threshold, min_freq, spm_threshold)
+        heuristicMining.generate_graph(spm_threshold, node_freq_threshold, edge_freq_threshold, dependency_threshold,
+                                       min_frequency)
         self.__check_graph_integrity(heuristicMining.get_graph())
 
-    def __run_CallcenterExample_csv(self, threshold, min_freq, spm_threshold):
+    def __run_CallcenterExample_csv(self, spm_threshold, node_freq_threshold, edge_freq_threshold, dependency_threshold,
+                                    min_frequency):
         heuristicMining = HeuristicMining(
             read(
                 "tests/testcsv/CallcenterExample.csv",
@@ -84,7 +87,8 @@ class TestHeuristic(unittest.TestCase):
                 timeLabel="Start Date",
             )
         )
-        heuristicMining.create_dependency_graph_with_graphviz(threshold, min_freq, spm_threshold)
+        heuristicMining.generate_graph(spm_threshold, node_freq_threshold, edge_freq_threshold, dependency_threshold,
+                                       min_frequency)
         self.__check_graph_integrity(heuristicMining.get_graph())
 
     def __check_graph_integrity(self, graph: BaseGraph):

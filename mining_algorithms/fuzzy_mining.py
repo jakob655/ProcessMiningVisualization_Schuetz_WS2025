@@ -14,7 +14,7 @@ class FuzzyMining(BaseMining):
         super().__init__(cases)
         self.logger = get_logger("FuzzyMining")
         self.minimum_correlation = None
-        self.__calculate_filtered_model_state()
+        self._calculate_filtered_model_state()
 
         self.clustered_nodes = None
         self.sign_dict = None
@@ -29,9 +29,9 @@ class FuzzyMining(BaseMining):
         """
         self.cluster_id_mapping = None
 
-    def create_graph_with_graphviz(
-        self, unary_significance, binary_significance, correlation, edge_cutoff, utility_ratio, spm_threshold
-    ):
+    def generate_graph(
+            self, spm_threshold, node_freq_threshold, edge_freq_threshold, unary_significance, binary_significance,
+            correlation, edge_cutoff, utility_ratio):
         self.unary_significance = unary_significance
         self.binary_significance = binary_significance
         self.correlation = correlation
@@ -41,23 +41,23 @@ class FuzzyMining(BaseMining):
         self.cluster_id_mapping = {}
         self.minimum_correlation = correlation
 
-        self.spm_filtered_events = self.get_spm_filtered_events()
-        self.spm_filtered_log = self.get_spm_filtered_log()
+        self.recalculate_model_filters()
 
         self.graph = FuzzyGraph()
 
         if not self.spm_filtered_events:
             self.graph.add_start_node()
             self.graph.add_end_node()
+            self.graph.create_edge("Start", "End", 0.1)
             return
 
-        self.__calculate_filtered_model_state()
+        self._calculate_filtered_model_state()
 
         # self.correlation_of_nodes = self.__calculate_correlation_dependency_matrix(correlation)
 
-        self.logger.debug("Unary Significance: " + str(unary_significance))
-        self.logger.debug("Binary Significance: " + str(binary_significance))
-        self.logger.debug("Succession: " + "\n" + str(self.succession_matrix))
+        self.logger.debug("Unary Significance: " + str(self.unary_significance))
+        self.logger.debug("Binary Significance: " + str(self.binary_significance))
+        self.logger.debug("Succession: " + "\n" + str(self.filtered_succession_matrix))
 
         # 1 Rule remove less significant and less correlated nodes
         self.corr_after_first_rule, self.sign_after_first_rule = (
@@ -65,7 +65,7 @@ class FuzzyMining(BaseMining):
                 self.spm_filtered_events,
                 self.correlation_of_nodes,
                 self.node_significance_matrix,
-                unary_significance,
+                self.unary_significance,
             )
         )
 
@@ -101,7 +101,7 @@ class FuzzyMining(BaseMining):
             nodes_after_first_rule,
             self.corr_after_first_rule,
             self.sign_after_first_rule,
-            unary_significance,
+            self.unary_significance,
         )
         self.logger.debug("Clustered nodes: " + str(clustered_nodes_after_sec_rule))
         self.list_of_clustered_nodes = self.__convert_clustered_nodes_to_list(
@@ -331,9 +331,15 @@ class FuzzyMining(BaseMining):
 
                 # divide by 0 or 0 divided by a number will be assigned with 0
                 if numerator == 0 or denominator == 0:
+                    self.logger.debug(
+                        f"Division by zero during normalization: util={util_value}, min={min_val}, max={max_val}")
                     new_val = 0.0
-                else:
+                elif (numerator > 0) and (denominator > 0):
                     new_val = np.round((numerator / denominator), 2)
+                else:
+                    self.logger.debug(
+                        f"Division by negative number during normalization: util={util_value}, min={min_val}, max={max_val}")
+                    new_val = 0.0
 
                 if (
                     not np.isnan(new_val)
@@ -755,7 +761,8 @@ class FuzzyMining(BaseMining):
 
     def __calculate_significance(self, appearance_frequency):
         # find the most frequently node from of all events
-        max_value = max(appearance_frequency.values())
+        max_value = max(max(appearance_frequency.values(), default=0), 1)
+
         dict = {}
         # dict = {key: value / max_value for key, value in self.appearance_activities.items()}
         for key, value in appearance_frequency.items():
@@ -767,9 +774,10 @@ class FuzzyMining(BaseMining):
         # create a matrix with the same shape and fill it with zeros
         correlation_matrix = np.zeros(succession_matrix.shape)
         outgoing_edges = np.sum(succession_matrix, axis=1)
+        safe_outgoing_edges = np.where(outgoing_edges == 0, 1, outgoing_edges)
 
         correlation_matrix = np.round(
-            succession_matrix / outgoing_edges[:, np.newaxis], decimals=2
+            succession_matrix / safe_outgoing_edges[:, np.newaxis], decimals=2
         )
 
         correlation_matrix = np.where(
@@ -802,22 +810,9 @@ class FuzzyMining(BaseMining):
     def get_utility_ratio(self):
         return self.utility_ratio
 
-    def __calculate_filtered_model_state(self):
-        filtered_appearance_frequency = {
-            event: sum(freq for trace, freq in self.spm_filtered_log.items() if event in trace)
-            for event in self.spm_filtered_events
-        }
-
-        filtered_event_positions = {event: i for i, event in enumerate(self.spm_filtered_events)}
-
-        filtered_succession_matrix = np.zeros((len(self.spm_filtered_events), len(self.spm_filtered_events)))
-        for trace, freq in self.spm_filtered_log.items():
-            indices = [filtered_event_positions[event] for event in trace]
-            for i in range(len(indices) - 1):
-                filtered_succession_matrix[indices[i]][indices[i + 1]] += freq
-
-        self.correlation_of_nodes = self.__create_correlation_dependency_matrix(filtered_succession_matrix)
-        self.significance_of_nodes = self.__calculate_significance(filtered_appearance_frequency)
+    def _calculate_filtered_model_state(self):
+        self.correlation_of_nodes = self.__create_correlation_dependency_matrix(self.filtered_succession_matrix)
+        self.significance_of_nodes = self.__calculate_significance(self.filtered_appearance_freqs)
         self.node_significance_matrix = self.__calculate_node_significance_matrix(
             self.significance_of_nodes,
         )

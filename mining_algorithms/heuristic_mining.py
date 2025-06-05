@@ -9,84 +9,101 @@ class HeuristicMining(BaseMining):
         super().__init__(log)
         self.logger = get_logger("HeuristicMining")
 
-        self.dependency_matrix = self.__create_dependency_matrix()
+        self.dependency_matrix = {}
 
         # Graph modifiers
         self.min_edge_thickness = 1
-        self.min_frequency = 1
+        self.min_frequency = 0
         self.dependency_threshold = 0.5
 
-    def create_dependency_graph_with_graphviz(
-        self, dependency_threshold, min_frequency, spm_threshold
+    def generate_graph(
+            self, spm_threshold, node_freq_threshold, edge_freq_threshold, dependency_threshold, min_frequency
     ):
-        dependency_graph = self.__create_dependency_graph(
-            dependency_threshold, min_frequency
-        )
+        self.graph = HeuristicGraph()
+
         self.start_nodes = self._get_start_nodes()
         self.end_nodes = self._get_end_nodes()
 
+        self.spm_threshold = spm_threshold
+        self.node_freq_threshold = node_freq_threshold
+        self.edge_freq_threshold = edge_freq_threshold
         self.dependency_threshold = dependency_threshold
         self.min_frequency = min_frequency
-        self.spm_threshold = spm_threshold
 
-        self.graph = HeuristicGraph()
+        self.recalculate_model_filters()
+        self.dependency_matrix = self.__create_dependency_matrix()
 
-        self.spm_filtered_events = self.get_spm_filtered_events()
+        dependency_graph = self.__create_dependency_graph(
+            dependency_threshold, min_frequency
+        )
 
         # add nodes to graph
-        for node in self.spm_filtered_events:
-            node_freq = self.appearance_frequency.get(node)
+        for node in self.node_frequency_filtered_events:
+            node_freq = self.filtered_appearance_freqs.get(node)
             w, h = self.calculate_node_size(node)
             self.graph.add_event(node, node_freq, (w, h))
 
         # cluster the edge thickness sizes based on frequency
-        edge_frequencies = self.dependency_matrix.flatten()
-        edge_frequencies = np.unique(edge_frequencies[edge_frequencies >= 0.0])
-        edge_freq_sorted, edge_freq_labels_sorted = self.get_clusters(
-            edge_frequencies
-        )
+        if self.dependency_matrix.any():
+            edge_frequencies = self.dependency_matrix.flatten()
+            edge_frequencies = np.unique(edge_frequencies[edge_frequencies >= 0.0])
+            edge_freq_sorted, edge_freq_labels_sorted = self.get_clusters(
+                edge_frequencies
+            )
 
         # add edges to graph
-        for i in range(len(self.spm_filtered_events)):
+        for i in range(len(self.node_frequency_filtered_events)):
             column_total = 0.0
             row_total = 0.0
-            for j in range(len(self.spm_filtered_events)):
+            for j in range(len(self.node_frequency_filtered_events)):
                 column_total = column_total + dependency_graph[i][j]
                 row_total = row_total + dependency_graph[j][i]
+                source = self.node_frequency_filtered_events[i]
+                target = self.node_frequency_filtered_events[j]
                 if dependency_graph[i][j] == 1.:
                     if dependency_threshold == 0:
                         edge_thickness = 0.1
                     else:
                         edge_thickness = edge_freq_labels_sorted[
-                                             edge_freq_sorted.index(self.dependency_matrix[i][j])] + self.min_edge_thickness
+                                             edge_freq_sorted.index(
+                                                 self.dependency_matrix[i][j])] + self.min_edge_thickness
 
                     self.graph.create_edge(
-                        source=str(self.spm_filtered_events[i]),
-                        destination=str(self.spm_filtered_events[j]),
+                        source=str(source),
+                        destination=str(target),
                         size=edge_thickness,
-                        weight=int(self.succession_matrix[i][j])
+                        weight=int(self.filtered_succession_matrix[i][j])
                     )
 
-                if j == len(self.spm_filtered_events) - 1 and column_total == 0 and self.spm_filtered_events[i] not in self.end_nodes:
-                    self.end_nodes.add(self.spm_filtered_events[i])
-                if j == len(self.spm_filtered_events) - 1 and row_total == 0 and self.spm_filtered_events[i] not in self.start_nodes:
-                    self.start_nodes.add(self.spm_filtered_events[i])
+                if j == len(self.node_frequency_filtered_events) - 1 and column_total == 0 and \
+                        self.node_frequency_filtered_events[i] not in self.end_nodes:
+                    self.end_nodes.add(self.node_frequency_filtered_events[i])
+                if j == len(self.node_frequency_filtered_events) - 1 and row_total == 0 and \
+                        self.node_frequency_filtered_events[i] not in self.start_nodes:
+                    self.start_nodes.add(self.node_frequency_filtered_events[i])
 
         # add start and end nodes
         self.graph.add_start_node()
         self.graph.add_end_node()
 
+        if not self.node_frequency_filtered_events:
+            self.graph.create_edge(
+                source=str("Start"),
+                destination=str("End"),
+                size=0.1,
+            )
+
         # add starting and ending edges from the log to the graph. Only if they are filtered
-        self.graph.add_starting_edges(self.start_nodes.intersection(self.spm_filtered_events))
-        self.graph.add_ending_edges(self.end_nodes.intersection(self.spm_filtered_events))
+        self.graph.add_starting_edges(self.start_nodes.intersection(self.node_frequency_filtered_events))
+        self.graph.add_ending_edges(self.end_nodes.intersection(self.node_frequency_filtered_events))
 
         # get filtered sources and sinks from the dependency graph
         source_nodes = self.__get_sources_from_dependency_graph(
             dependency_graph
-        ).intersection(self.spm_filtered_events)
+        ).intersection(self.node_frequency_filtered_events)
         sink_nodes = self.__get_sinks_from_dependency_graph(
             dependency_graph
-        ).intersection(self.spm_filtered_events)
+        ).intersection(self.node_frequency_filtered_events)
 
         # add starting and ending edges from the dependency graph to the graph
         self.graph.add_starting_edges(source_nodes - self.start_nodes)
@@ -100,22 +117,25 @@ class HeuristicMining(BaseMining):
 
     def get_max_frequency(self):
         max_freq = 0
-        for value in list(self.appearance_frequency.values()):
+        for value in (self.filtered_appearance_freqs.values()):
             if value > max_freq:
                 max_freq = value
-        return max_freq
+        return max(max_freq, 1)
 
     def __create_dependency_matrix(self):
-        dependency_matrix = np.zeros(self.succession_matrix.shape)
+        dependency_matrix = np.zeros(self.filtered_succession_matrix.shape)
         y = 0
-        for row in self.succession_matrix:
+        for row in self.filtered_succession_matrix:
             x = 0
             for i in row:
                 if x == y:
-                    dependency_matrix[x][y] = self.succession_matrix[x][y] / (self.succession_matrix[x][y] + 1)
+                    dependency_matrix[x][y] = self.filtered_succession_matrix[x][y] / (
+                                self.filtered_succession_matrix[x][y] + 1)
                 else:
-                    dependency_matrix[x][y] = (self.succession_matrix[x][y] - self.succession_matrix[y][x]) / (
-                            self.succession_matrix[x][y] + self.succession_matrix[y][x] + 1)
+                    dependency_matrix[x][y] = (self.filtered_succession_matrix[x][y] -
+                                               self.filtered_succession_matrix[y][x]) / (
+                                                      self.filtered_succession_matrix[x][y] +
+                                                      self.filtered_succession_matrix[y][x] + 1)
                 x += 1
             y += 1
         return dependency_matrix
@@ -125,8 +145,14 @@ class HeuristicMining(BaseMining):
         y = 0
         for row in dependency_graph:
             for x in range(len(row)):
-                if (self.dependency_matrix[y][x] >= dependency_threshold and
-                        self.succession_matrix[y][x] >= min_frequency):
+                a = self.filtered_events[y]
+                b = self.filtered_events[x]
+
+                if (
+                        self.dependency_matrix[y][x] >= dependency_threshold and
+                        self.filtered_succession_matrix[y][x] >= min_frequency and
+                        self.filter_edge(a, b)
+                ):
                     dependency_graph[y][x] += 1
             y += 1
 
@@ -134,11 +160,11 @@ class HeuristicMining(BaseMining):
 
     def __get_sources_from_dependency_graph(self, dependency_graph):
         indices = self.__get_all_axis_with_all_zero(dependency_graph, axis=0)
-        return set([self.events[i] for i in indices])
+        return set([self.filtered_events[i] for i in indices])
 
     def __get_sinks_from_dependency_graph(self, dependency_graph):
         indices = self.__get_all_axis_with_all_zero(dependency_graph, axis=1)
-        return set([self.events[i] for i in indices])
+        return set([self.filtered_events[i] for i in indices])
 
     def __get_all_axis_with_all_zero(self, dependency_graph, axis=0):
         filter_matrix = dependency_graph == 0

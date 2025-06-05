@@ -21,6 +21,9 @@ class InductiveMinerController(BaseAlgorithmController):
         dataframe_transformations : DataframeTransformations, optional
             The class for the dataframe transformations. If None is passed, a new instance is created, by default None
         """
+        self.traces_threshold = None
+        self.activity_threshold = None
+
         if views is None:
             views = [InductiveMinerView()]
 
@@ -42,6 +45,7 @@ class InductiveMinerController(BaseAlgorithmController):
         """Processes the algorithm parameters from the session state. The parameters are set to the instance variables.
         If the parameters are not set in the session state, the default values are used.
         """
+        super().process_algorithm_parameters()
         # set session state from instance variables if not set
         if "traces_threshold" not in st.session_state:
             st.session_state.traces_threshold = self.mining_model.get_traces_threshold()
@@ -51,17 +55,13 @@ class InductiveMinerController(BaseAlgorithmController):
                 self.mining_model.get_activity_threshold()
             )
 
-        if "spm_threshold" not in st.session_state:
-            st.session_state.spm_threshold = self.mining_model.get_spm_threshold()
-
         # set instance variables from session state
         self.traces_threshold = st.session_state.traces_threshold
         self.activity_threshold = st.session_state.activity_threshold
-        self.spm_threshold = st.session_state.spm_threshold
 
     def perform_mining(self) -> None:
         """Performs the mining of the Inductive Miner algorithm."""
-        self.mining_model.generate_graph(self.activity_threshold, self.traces_threshold, self.spm_threshold)
+        super().perform_mining(activity_threshold=self.activity_threshold, traces_threshold=self.traces_threshold)
 
     def have_parameters_changed(self) -> bool:
         """Checks if the algorithm parameters have changed.
@@ -72,9 +72,9 @@ class InductiveMinerController(BaseAlgorithmController):
             True if the algorithm parameters have changed, False otherwise.
         """
         return (
-            self.mining_model.get_activity_threshold() != self.activity_threshold
-            or self.mining_model.get_traces_threshold() != self.traces_threshold
-            or self.mining_model.get_spm_threshold() != self.spm_threshold
+                super().have_parameters_changed()
+                or self.mining_model.get_activity_threshold() != self.activity_threshold
+                or self.mining_model.get_traces_threshold() != self.traces_threshold
         )
 
     def get_sidebar_values(self) -> dict[str, tuple[int | float, int | float]]:
@@ -86,10 +86,10 @@ class InductiveMinerController(BaseAlgorithmController):
             A dictionary containing the minimum and maximum values for the sidebar sliders.
             The keys of the dictionary are equal to the keys of the sliders.
         """
-        sidebar_values = {
+        sidebar_values = super().get_sidebar_values()
+        sidebar_values.update({
             "traces_threshold": (0.0, 1.0),
             "activity_threshold": (0.0, 1.0),
-            "spm_threshold": (0.0, 1.0)
-        }
+        })
 
         return sidebar_values

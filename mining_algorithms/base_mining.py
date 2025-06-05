@@ -1,7 +1,7 @@
 import numpy as np
 from mining_algorithms.mining_interface import MiningInterface
 from logger import get_logger
-from collections import OrderedDict
+from collections import deque, Counter
 
 
 class BaseMining(MiningInterface):
@@ -23,16 +23,38 @@ class BaseMining(MiningInterface):
         self.logger = get_logger("BaseMining")
         self.log = log
         # self.events contains all events(unique!), appearance_activities are dictionaries, events:appearances ex. {'a':3, ...}
-        self.events, self.appearance_frequency = self.__filter_out_all_events()
+        self.events, self.appearance_frequency = self.__filter_out_all_events(self.log)
         self.logger.debug(f"Events: {self.events}")
         self.logger.debug(f"Appearance Frequency: {self.appearance_frequency}")
-        self.event_positions = {event: i for i, event in enumerate(self.events)}
-        self.succession_matrix = self.__create_succession_matrix()
+        self.event_positions = self.get_event_positions(self.events)
+        self.succession_matrix = self.__create_succession_matrix(self.log, self.events, self.event_positions)
         self.logger.debug(f"Succession Matrix: {self.succession_matrix}")
 
-        self.event_freq_sorted, self.event_freq_labels_sorted = self.get_clusters(
-            list(self.appearance_frequency.values())
-        )
+        # default filter setup
+        self.spm_threshold = 0.0
+        self.node_freq_threshold = 0.0
+        self.edge_freq_threshold = 0.0
+
+        self._filter_state = {
+            "spm_threshold": self.spm_threshold,
+            "node_freq_threshold": self.node_freq_threshold,
+            "edge_freq_threshold": self.edge_freq_threshold
+        }
+
+        self.spm_filtered_events = self.get_spm_filtered_events()
+        self.spm_filtered_log = self.get_spm_filtered_log()
+
+        self.logger.debug(f"SPM Filtered Events: {self.spm_filtered_events}")
+        self.logger.debug(f"SPM Filtered Log: {self.spm_filtered_log}")
+
+        self.node_frequencies = self.get_node_frequencies()
+        self.node_frequency_filtered_events = self.get_node_frequency_filtered_events()
+        self.node_frequency_filtered_log = self.get_node_frequency_filtered_log()
+
+        self.logger.debug(f"SPM & Frequency Filtered Events: {self.node_frequency_filtered_events}")
+        self.logger.debug(f"SPM & Frequency Filtered Log: {self.node_frequency_filtered_log}")
+
+        self.edge_frequencies = self.get_edge_frequencies()
 
         self.start_nodes = self._get_start_nodes()
         self.end_nodes = self._get_end_nodes()
@@ -40,14 +62,22 @@ class BaseMining(MiningInterface):
         self.logger.debug(f"Start Nodes: {self.start_nodes}")
         self.logger.debug(f"End Nodes: {self.end_nodes}")
 
-        self.spm_threshold = 0.0
-        self.spm_filtered_events = self.get_spm_filtered_events()
-        self.spm_filtered_log = self.get_spm_filtered_log()
+        self.filtered_event_positions = self.get_event_positions(self.node_frequency_filtered_events)
+        self.filtered_succession_matrix = self.__create_succession_matrix(self.node_frequency_filtered_log,
+                                                                          self.node_frequency_filtered_events,
+                                                                          self.filtered_event_positions)
+        self.logger.debug(f"Filtered succession Matrix: {self.filtered_succession_matrix}")
 
-        self.logger.debug(f"Filtered Events: {self.spm_filtered_events}")
-        self.logger.debug(f"Filtered Log: {self.spm_filtered_log}")
+        self.filtered_events, self.filtered_appearance_freqs = self.__filter_out_all_events(
+            self.node_frequency_filtered_log)
+        self.logger.debug(f"Filtered Events: {self.filtered_events}")
 
-    def __filter_out_all_events(self) -> tuple[list[str], dict[str, int]]:
+        self.event_freq_sorted, self.event_freq_labels_sorted = self.get_clusters(
+            list(self.filtered_appearance_freqs.values())
+        )
+
+    @staticmethod
+    def __filter_out_all_events(log) -> tuple[list[str], dict[str, int]]:
         """create a list of all events and a dictionary of all events with their frequencies
 
         Returns
@@ -56,7 +86,7 @@ class BaseMining(MiningInterface):
             A tuple containing a list of all unique events and a dictionary of all events with their frequencies
         """
         dic = {}
-        for trace, frequency in self.log.items():
+        for trace, frequency in log.items():
             for activity in trace:
                 if activity in dic:
                     dic[activity] = dic[activity] + frequency
@@ -65,6 +95,10 @@ class BaseMining(MiningInterface):
 
         activities = list(dic.keys())
         return activities, dic
+
+    @staticmethod
+    def get_event_positions(events):
+        return {event: i for i, event in enumerate(events)}
 
     def calculate_node_size(self, node: str) -> tuple[float, float]:
         """calculate the size of a node based on the frequency of the event.
@@ -100,7 +134,7 @@ class BaseMining(MiningInterface):
         float
             The scale factor for the node
         """
-        node_freq = self.appearance_frequency.get(node)
+        node_freq = self.filtered_appearance_freqs.get(node)
         scale_factor = self.event_freq_labels_sorted[
             self.event_freq_sorted.index(node_freq)
         ]
@@ -114,7 +148,7 @@ class BaseMining(MiningInterface):
         set[str]
             A set containing all start nodes
         """
-        return set([trace[0] for trace in self.log.keys() if len(trace) > 0])
+        return set([trace[0] for trace in self.node_frequency_filtered_log.keys() if len(trace) > 0])
 
     def _get_end_nodes(self) -> set[str]:
         """get all end nodes from the log. An end node is an event that is the last event in a trace.
@@ -124,9 +158,10 @@ class BaseMining(MiningInterface):
         set[str]
             A set containing all end nodes
         """
-        return set([trace[-1] for trace in self.log.keys() if len(trace) > 0])
+        return set([trace[-1] for trace in self.node_frequency_filtered_log.keys() if len(trace) > 0])
 
-    def __create_succession_matrix(self) -> np.ndarray:
+    @staticmethod
+    def __create_succession_matrix(log, events, event_positions) -> np.ndarray:
         """create a succession matrix from the log. The matrix contains the frequencies of the transitions between events.
         Connections from the start node to an event and from an event to the end node are not included in the matrix.
 
@@ -135,13 +170,15 @@ class BaseMining(MiningInterface):
         np.ndarray
             The succession matrix
         """
-        succession_matrix = np.zeros((len(self.events), len(self.events)))
-        for trace, frequency in self.log.items():
-            indices = [self.event_positions[event] for event in trace]
-            source_indices = indices[:-1]
-            target_indices = indices[1:]
-            # https://numpy.org/doc/stable/reference/generated/numpy.ufunc.at.html
-            np.add.at(succession_matrix, (source_indices, target_indices), frequency)
+        succession_matrix = np.zeros((len(events), len(events)))
+        for trace, frequency in log.items():
+            for i in range(len(trace) - 1):
+                a = trace[i]
+                b = trace[i + 1]
+                if a in event_positions and b in event_positions:
+                    x = event_positions[a]
+                    y = event_positions[b]
+                    succession_matrix[x][y] += frequency
 
         return succession_matrix
 
@@ -173,7 +210,7 @@ class BaseMining(MiningInterface):
             ]
         )
 
-    def calulate_minimum_traces_frequency(self, threshold: float) -> int:
+    def calculate_minimum_traces_frequency(self, threshold: float) -> int:
         """calculate the minimum frequency of a trace based on a threshold. The threshold is a percentage of the maximum frequency of a trace.
 
         Parameters
@@ -191,11 +228,12 @@ class BaseMining(MiningInterface):
         elif threshold < 0.0:
             threshold = 0.0
 
-        minimum_trace_freq = round(max(self.log.values()) * threshold)
+        minimum_trace_freq = round(max(self.node_frequency_filtered_log.values()) * threshold)
 
         return minimum_trace_freq
 
-    def calculate_degree(self, node, events, succession_matrix):
+    @staticmethod
+    def calculate_degree(node, events, succession_matrix):
         """Calculate the degree of a node in the succession matrix.
 
         The degree is defined as the sum of the node's in-degree and out-degree,
@@ -263,16 +301,6 @@ class BaseMining(MiningInterface):
             activities.update(trace)
         return len(activities), total_events
 
-    def get_spm_threshold(self):
-        """Get the current threshold used for the SPM filter.
-
-            Returns
-            -------
-            float
-                The SPM threshold value.
-        """
-        return self.spm_threshold
-
     def get_spm_filtered_events(self) -> list[str]:
         """Filter events based on their SPM value using the current threshold.
 
@@ -285,11 +313,11 @@ class BaseMining(MiningInterface):
         set[str]
             A set of event labels that have an SPM value greater than or equal to the threshold.
         """
-        _A, _L = self.calculate_A_and_L()
+        A, L = self.calculate_A_and_L()
         filtered_events = []
         for node in self.events:
             node_freq = self.appearance_frequency.get(node)
-            spm = self.calculate_spm(node, self.events, node_freq, _A, _L, self.succession_matrix)
+            spm = self.calculate_spm(node, self.events, node_freq, A, L, self.succession_matrix)
             if spm >= self.spm_threshold:
                 filtered_events.append(node)
         return filtered_events
@@ -313,3 +341,245 @@ class BaseMining(MiningInterface):
             for trace, freq in self.log.items()
             if (filtered_trace := tuple(e for e in trace if e in self.spm_filtered_events))
         }
+
+    def get_spm_threshold(self):
+        """Get the current threshold used for the SPM filter.
+
+        Returns
+        -------
+        float
+            The SPM threshold value.
+        """
+        return self.spm_threshold
+
+    def get_node_frequencies(self) -> dict:
+        """
+        Calculate the normalized frequency of each node (event) in the SPM-filtered log.
+
+        Frequencies are calculated across all traces in the log and normalized by the
+        total number of events. This helps identify which events are most common
+        in the process after applying the SPM filtering step.
+
+        Returns
+        -------
+        dict[str, float]
+            A dictionary with each node label mapped to its normalized frequency.
+        """
+        node_counts = Counter()
+        total = 0
+        for trace, freq in self.spm_filtered_log.items():
+            for event in trace:
+                node_counts[event] += freq
+                total += freq
+
+        if total == 0:
+            return {}
+
+        # Normalize frequencies (relative)
+        return {node: count / total for node, count in node_counts.items()}
+
+    def get_edge_frequencies(self) -> dict:
+        """
+        Calculate the normalized frequency of each directly-follows edge in the filtered log.
+
+        Frequencies are based on the number of times one event is followed directly
+        by another in the node-frequency-filtered log, normalized by the total number
+        of such transitions.
+
+        Returns
+        -------
+        dict[tuple[str, str], float]
+            A dictionary with each edge (as a tuple of source and target event labels)
+            mapped to its normalized frequency.
+        """
+        edge_counts = Counter()
+        total = 0
+        for trace, freq in self.node_frequency_filtered_log.items():
+            for i in range(len(trace) - 1):
+                edge = (trace[i], trace[i + 1])
+                edge_counts[edge] += freq
+                total += freq
+
+        if total == 0:
+            return {}
+
+        # Normalize frequencies (relative)
+        return {edge: count / total for edge, count in edge_counts.items()}
+
+    def get_node_frequency_threshold(self):
+        """Get the current threshold used for the node frequency filter.
+
+        Returns
+        -------
+        float
+            The node frequency.
+        """
+        return self.node_freq_threshold
+
+    def get_edge_frequency_threshold(self):
+        """Get the current threshold used for the edge frequency filter.
+
+        Returns
+        -------
+        float
+            The edge frequency.
+        """
+        return self.edge_freq_threshold
+
+    def get_node_frequency_filtered_events(self) -> list[str]:
+        """
+        Filter events based on their normalized node frequency using the current threshold.
+
+        This operates on the SPM-filtered log and keeps only the nodes whose
+        normalized frequency is above the configured `node_freq_threshold`.
+
+        Returns
+        -------
+        list[str]
+            A list of events (nodes) whose normalized frequencies are >= node_freq_threshold.
+        """
+        allowed_nodes = {node for node, freq in self.node_frequencies.items() if freq >= self.node_freq_threshold}
+        return [node for node in self.spm_filtered_events if node in allowed_nodes]
+
+    def get_node_frequency_filtered_log(self) -> dict[tuple[str, ...], int]:
+        """
+        Filter the SPM-filtered log to include only events passing the node frequency threshold.
+
+        Returns
+        -------
+        dict[tuple[str], int]
+            A dictionary with traces filtered by node frequency threshold.
+        """
+        return {
+            filtered_trace: freq
+            for trace, freq in self.spm_filtered_log.items()
+            if (filtered_trace := tuple(e for e in trace if e in self.node_frequency_filtered_events))
+        }
+
+    def filter_edge(self, a: str, b: str) -> bool:
+        """Return True if edge (a -> b) passes frequency threshold"""
+        return self.edge_frequencies.get((a, b), 0) >= self.edge_freq_threshold
+
+    @staticmethod
+    def has_path(graph: dict[str, list[str]], start: str, end: str) -> bool:
+        """
+        Determine whether there is a path from 'start' to 'end' in a given graph.
+
+        Uses breadth-first search on a directed adjacency list to test reachability
+        between two nodes.
+
+        Parameters
+        ----------
+        graph : dict[str, list[str]]
+            A dictionary representing the graph where keys are node labels and values
+            are lists of adjacent (reachable) nodes.
+        start : str
+            The starting node.
+        end : str
+            The target node.
+
+        Returns
+        -------
+        bool
+            True if a path exists from 'start' to 'end', False otherwise.
+        """
+        visited = set()
+        queue = deque([start])
+
+        while queue:
+            node = queue.popleft()
+            if node == end:
+                return True
+            if node not in visited:
+                visited.add(node)
+                queue.extend(graph.get(node, []))
+        return False
+
+    def get_node_statistics(self) -> list[dict]:
+        """
+        Returns statistics for each node in the current filtered event list.
+        Includes: node label, normalized frequency, and SPM value.
+
+        Returns
+        -------
+        list[dict]
+            List of node statistics dictionaries.
+        """
+        A, L = self.calculate_A_and_L()
+        stats = []
+
+        for node in self.filtered_events:
+            freq = self.node_frequencies.get(node, 0.0)
+            spm = self.calculate_spm(
+                node,
+                self.events,
+                self.appearance_frequency.get(node, 0),
+                A,
+                L,
+                self.succession_matrix
+            )
+            stats.append({
+                "node": node,
+                "frequency": freq,
+                "spm": spm
+            })
+
+        return stats
+
+    def get_edge_statistics(self) -> list[dict]:
+        """
+        Returns statistics for each edge (filtered) including frequency.
+
+        Returns
+        -------
+        list[dict]
+            List of edge statistics with source, target, and normalized frequency.
+        """
+        return [
+            {"source": a, "target": b, "frequency": freq}
+            for (a, b), freq in self.edge_frequencies.items()
+            if self.filter_edge(a, b)
+        ]
+
+    def recalculate_model_filters(self):
+        """Recalculate all filtered events, logs, and frequencies based on current thresholds, if they have changed."""
+
+        current_state = {
+            "spm_threshold": self.spm_threshold,
+            "node_freq_threshold": self.node_freq_threshold,
+            "edge_freq_threshold": self.edge_freq_threshold
+        }
+
+        if current_state == self._filter_state:
+            self.logger.debug("No filter changes detected - skipping recalculation.")
+            return
+
+        self.logger.debug("Filter state changed - recalculating all filters.")
+        self._filter_state = current_state
+
+        self.spm_filtered_events = self.get_spm_filtered_events()
+        self.spm_filtered_log = self.get_spm_filtered_log()
+
+        self.node_frequencies = self.get_node_frequencies()
+        self.node_frequency_filtered_events = self.get_node_frequency_filtered_events()
+        self.node_frequency_filtered_log = self.get_node_frequency_filtered_log()
+
+        self.edge_frequencies = self.get_edge_frequencies()
+
+        self.start_nodes = self._get_start_nodes()
+        self.end_nodes = self._get_end_nodes()
+
+        self.filtered_event_positions = self.get_event_positions(self.node_frequency_filtered_events)
+        self.filtered_succession_matrix = self.__create_succession_matrix(self.node_frequency_filtered_log,
+                                                                          self.node_frequency_filtered_events,
+                                                                          self.filtered_event_positions)
+
+        self.filtered_events, self.filtered_appearance_freqs = self.__filter_out_all_events(
+            self.node_frequency_filtered_log)
+        if self.node_frequency_filtered_events:
+            freq_values = list(self.filtered_appearance_freqs.values())
+            if len(freq_values) <= 1 or max(freq_values) == min(freq_values):
+                self.logger.debug("Clustering skipped: not enough distinct node frequencies.")
+                self.event_freq_sorted, self.event_freq_labels_sorted = freq_values, [0] * len(freq_values)
+            else:
+                self.event_freq_sorted, self.event_freq_labels_sorted = self.get_clusters(freq_values)

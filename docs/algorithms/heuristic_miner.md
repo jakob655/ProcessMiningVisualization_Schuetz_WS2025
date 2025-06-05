@@ -8,7 +8,7 @@ The algorithm creates a directly-follows graph and stores it as a succession mat
 
 Currently, three metrics are used to simplify the graph, the **spm metric**, the **frequency metric** and the **dependency metric**.
 
-The **SPM filter** simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the **spm metric**, which balances complexity and common behavior. This abstraction helps generate clearer, more interpretable models—especially useful for user-driven processes like search behavior.
+The **SPM filter** simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the **spm metric**, which balances complexity and common behavior. This abstraction helps generate clearer, more interpretable models. Especially useful for user-driven processes like search behavior.
 
 The **frequency metric** is calculated for edges and nodes/events. The event frequency counts the occurrences of an event in the log. The edge frequency counts the number of times one event is directly followed by another event.
 

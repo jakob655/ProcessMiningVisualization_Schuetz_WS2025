@@ -6,23 +6,36 @@ The algorithm follows three rules. Significant nodes are kept and will not be me
 
 ## Metrics
 
-The fuzzy miner uses the following metrics, spm metric, unary significance, binary significance, correlation, utility ratio, utility value and the edge cutoff value.
+The fuzzy miner uses the following metrics: **SPM metric**, **unary significance**, **binary significance**, **correlation**, **utility ratio**, **utility value**, and **edge cutoff**.
 
-The SPM filter simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the spm metric, which balances complexity and common behavior. This abstraction helps generate clearer, more interpretable models—especially useful for user-driven processes like search behavior.
+The **SPM filter** simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the SPM metric, which balances complexity and common behavior. This abstraction helps generate clearer, more interpretable models, especially useful for user-driven processes like search behavior.
 
-The unary significance describes the relative importance of an event. A frequency significance is used, that counts the frequency of all the events and divides it by the maximum event frequency.
+**Unary significance** describes the relative importance of an individual event (node). It is calculated by dividing the number of times the event occurs by the frequency of the most frequent event in the log:
 
-The binary significance, or edge significance, is calculated by taking the source node's significance.
+`unary_significance(event) = frequency(event) / max(frequency of all events)`
 
-Correlation measures how closely related two events are. All edges between two nodes are counted, and divided by the sum of all edges with the same source.
+This value lies between 0.0 and 1.0 and reflects how central a node is within the process.
 
-The utility ratio defines a ratio to calculate the utility value by weighting the correlation and significance of an edge.
+**Binary significance**, also referred to as **edge significance**, quantifies the importance of a transition (edge) between two events. It combines both the source node’s frequency and the frequency of that edge. In this implementation, binary significance is part of the **utility value**, which is used to filter edges. Find more below at **Utility value**.
 
-The utility value is defined by using the binary significance, correlation, and the utility ratio.
+If the binary significance of an edge is below the binary significance threshold, the edge is ignored in the utility calculation and may be removed.
 
-`util (A,B) = utility_ratio *significance(A,B) + (1 - utility_ratio)* correlation(A,B)`
+**Correlation** measures how strongly two events are related. It is calculated by dividing the number of times an edge between two events occurs by the total number of outgoing edges from the source node:
 
-The edge cutoff is calculated by normalizing the utility value for edges with the same target node. The Min-Max normalization is used.
+`correlation(A, B) = frequency(A → B) / sum(frequency(A → *))`
+
+**Utility ratio** defines the weighting between binary significance and correlation when computing edge utility. A value of 1.0 considers only significance; a value of 0.0 considers only correlation.
+
+**Utility value** is the weighted combination of correlation and significance as defined above.
+
+`utility(A, B) = utility_ratio * significance(A, B) + (1 - utility_ratio) * correlation(A, B)`
+
+**Edge cutoff** is calculated by applying Min-Max normalization on the utility values of all incoming edges to a target node:
+
+`normalized_utility = (utility - min) / (max - min)`
+
+Edges with normalized utility below the cutoff value are removed.
+
 
 ## Filtering
 

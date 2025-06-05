@@ -1,4 +1,6 @@
 import streamlit as st
+
+from components.number_input_slider import number_input_slider
 from ui.base_ui.base_view import BaseView
 from components.buttons import home_button, navigation_button
 from components.interactiveGraph import interactiveGraph
@@ -30,22 +32,64 @@ class BaseAlgorithmView(BaseView):
         with export_button_column:
             self.export_button_container = st.empty()
 
-    @abstractmethod
     def render_sidebar(self, sidebar_values: dict[str, any]) -> None:
-        """Renders the sidebar for the algorithm views. This method must be implemented by the subclass.
-        The elements rendered are automatically displayed in the sidebar.
+        """Renders the sidebar for the algorithm views.
+        Displays shared filters and calls extension hooks for node and edge filtering.
 
         Parameters
         ----------
         sidebar_values : dict[str, any]
-            A dictionary containing the values for the sidebar elements. The keys of the dictionary are equal to the keys of the sliders.
-
-        Raises
-        ------
-        NotImplementedError
-            If the method is not implemented by the subclass.
+            A dictionary containing the values for the sidebar elements. The keys of the dictionary
+            are equal to the keys of the sliders and define the slider bounds.
         """
-        raise NotImplementedError("render_sidebar() method not implemented")
+        st.write("Node Filtering")
+
+        if "spm_threshold" in sidebar_values:
+            number_input_slider(
+                label="SPM Threshold",
+                min_value=sidebar_values["spm_threshold"][0],
+                max_value=sidebar_values["spm_threshold"][1],
+                key="spm_threshold",
+                help="Filter nodes based on the SPM metric threshold.",
+            )
+
+        if "node_frequency_threshold" in sidebar_values:
+            number_input_slider(
+                label="Node Frequency",
+                min_value=sidebar_values["node_frequency_threshold"][0],
+                max_value=sidebar_values["node_frequency_threshold"][1],
+                key="node_frequency_threshold",
+                help="Filter nodes based on their frequency.",
+            )
+
+        # Hook for additional node filters
+        self.render_node_filter_extensions(sidebar_values)
+
+        st.write("Edge Filtering")
+
+        if "edge_frequency_threshold" in sidebar_values:
+            number_input_slider(
+                label="Edge Frequency",
+                min_value=sidebar_values["edge_frequency_threshold"][0],
+                max_value=sidebar_values["edge_frequency_threshold"][1],
+                key="edge_frequency_threshold",
+                help="Filter edges based on their frequency.",
+            )
+
+        # Hook for additional edge filters
+        self.render_edge_filter_extensions(sidebar_values)
+
+    def render_node_filter_extensions(self, sidebar_values: dict[str, any]) -> None:
+        """Renders additional node filtering controls.
+        Can be overridden by subclasses to add more node filters.
+        """
+        pass
+
+    def render_edge_filter_extensions(self, sidebar_values: dict[str, any]) -> None:
+        """Renders additional edge filtering controls.
+        Can be overridden by subclasses to add more edge filters.
+        """
+        pass
 
     def display_sidebar(self, sidebar_values: dict[str, any]) -> None:
         """Displays the sidebar for the algorithm views. The methode calls the render_sidebar method of the subclass.

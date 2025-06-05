@@ -1,8 +1,8 @@
 # Alpha Miner
 
-The Alpha Miner is a fundamental process mining algorithm that constructs a process model by analyzing the behavior recorded in event logs. It is based on the idea of discovering causal relations, parallel behavior, and choices in the process.
+The Alpha Miner is a fundamental process mining algorithm that constructs a petri net by analyzing the behavior recorded in event logs. It is based on the idea of discovering causal relations, parallel behavior, and choices in the process.
 
-The algorithm is particularly suitable for well-structured processes, as it assumes that the process is fully observable and recorded without noise. It produces a workflow net that models the underlying process.
+The algorithm is particularly suitable for well-structured processes, as it assumes that the process is fully observable and recorded without noise. It produces a petri net that models the underlying process.
 
 ---
 
@@ -32,7 +32,7 @@ The Alpha Miner works by analyzing traces (sequences of events) in the event log
 
 5. **Construct the Process Graph**:
    
-   - Translate the relations and sets into a Petri net or process graph using nodes and edges.
+   - Translate the relations and sets into a Petri net using nodes and edges.
 
 ---
 
@@ -61,7 +61,7 @@ The Alpha Miner works by analyzing traces (sequences of events) in the event log
 
 2. **Outputs**:
    
-   - **Process Graph**: A Petri net or similar graph structure representing the process model.
+   - **Process Graph**: A Petri net representing the process model.
 
 3. **Steps**:
    
@@ -90,4 +90,4 @@ The SPM value ranges from 0.0 to 1.0 and reflects the semantic quality of a node
 ## References
 
 - The methodology and algorithm were introduced by **Professor Wil van der Aalst** in his lectures on process mining.
-- A detailed explanation can be found in the video: [Introduction to Alpha Miner](https://www.youtube.com/watch?v=ATBEEEDxHTQ).
+- A detailed explanation can be found in the video: [Petri Nets & Alpha Algorithm](https://www.youtube.com/watch?v=ATBEEEDxHTQ).
