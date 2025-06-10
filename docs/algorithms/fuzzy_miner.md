@@ -6,9 +6,16 @@ The algorithm follows three rules. Significant nodes are kept and will not be me
 
 ## Metrics
 
-The fuzzy miner uses the following metrics: **SPM metric**, **unary significance**, **binary significance**, **correlation**, **utility ratio**, **utility value**, and **edge cutoff**.
+The fuzzy miner uses the following metrics: **SPM metric**, **Node frequency**, **Edge frequency**, **unary significance**, **binary significance**, **correlation**, **utility ratio**, **utility value**, and **edge cutoff**.
 
 The **SPM filter** simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the SPM metric, which balances complexity and common behavior. This abstraction helps generate clearer, more interpretable models, especially useful for user-driven processes like search behavior.
+
+*For more information on the SPM metric, see: Marian Lux, Stefanie Rinderle-Ma, Andrei Preda: “Assessing the Quality of Search Process Models.”  
+Available online: https://ucrisportal.univie.ac.at/en/publications/assessing-the-quality-of-search-process-models*
+
+**Node frequency** measures how often each event (node) appears relative to the total number of events in the log. It is calculated after the SPM filtering step. The value lies between 0.0 and 1.0 and helps assess how central a node is in terms of frequency.
+
+**Edge frequency** represents how often a direct succession (edge) between two nodes occurs, normalized over all observed transitions. It is used to determine the importance of direct paths in the process.
 
 **Unary significance** describes the relative importance of an individual event (node). It is calculated by dividing the number of times the event occurs by the frequency of the most frequent event in the log:
 
@@ -39,9 +46,13 @@ Edges with normalized utility below the cutoff value are removed.
 
 ## Filtering
 
-Six metrics are used for filtering in the fuzzy miner algorithm: **spm threshold** **unary significance**, **binary significance**, **correlation**, **edge cutoff**, and **utility ratio**.
+Eight metrics are used for filtering in the fuzzy miner algorithm: **spm threshold**, **node frequency*, **edge frequency**, **unary significance**, **binary significance**, **correlation**, **edge cutoff**, and **utility ratio**.
 
 The **SPM** value ranges from 0.0 to 1.0 and reflects the semantic quality of a node. It defines the threshold below which nodes are considered low-quality due to low frequency or high complexity, and may be removed for abstraction.
+
+The **node frequency** value is in the range of 0.0 to 1.0. It filters out nodes that appear too rarely in the log. Nodes below this threshold are removed after the SPM filtering step.
+
+The **edge frequency** value is in the range of 0.0 to 1.0. It filters out transitions (edges) that occur too infrequently in the log. These edges are removed before utility-based edge filtering is applied.
 
 The **unary significance** value is in the range of 0.0 to 1.0. It defines the threshold until a node is considered frequent and relevant. Nodes below this value may be removed or clustered.
 

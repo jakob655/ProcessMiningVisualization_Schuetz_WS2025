@@ -165,20 +165,30 @@ class BaseMining(MiningInterface):
         """create a succession matrix from the log. The matrix contains the frequencies of the transitions between events.
         Connections from the start node to an event and from an event to the end node are not included in the matrix.
 
+        Parameters
+        ----------
+        log : dict[tuple[str, ...], int]
+            A dictionary of traces and their frequencies. Each trace is a tuple of event labels,
+            and the value is the number of times the trace occurred.
+        events : list[str]
+            A list of all unique event labels present in the log. The order of events determines the
+            row/column indexing in the resulting matrix.
+        event_positions : dict[str, int]
+            A dictionary mapping each event label to its index in the `events` list.
+
         Returns
         -------
         np.ndarray
-            The succession matrix
+            A 2D NumPy array of shape (len(events), len(events)) containing the frequency of direct successions
+            between events. Entry [i][j] represents how often event `events[i]` is directly followed by `events[j]`.
         """
         succession_matrix = np.zeros((len(events), len(events)))
         for trace, frequency in log.items():
-            for i in range(len(trace) - 1):
-                a = trace[i]
-                b = trace[i + 1]
-                if a in event_positions and b in event_positions:
-                    x = event_positions[a]
-                    y = event_positions[b]
-                    succession_matrix[x][y] += frequency
+            indices = [event_positions[event] for event in trace]
+            source_indices = indices[:-1]
+            target_indices = indices[1:]
+            # https://numpy.org/doc/stable/reference/generated/numpy.ufunc.at.html
+            np.add.at(succession_matrix, (source_indices, target_indices), frequency)
 
         return succession_matrix
 
@@ -461,39 +471,33 @@ class BaseMining(MiningInterface):
         return self.edge_frequencies.get((a, b), 0) >= self.edge_freq_threshold
 
     @staticmethod
-    def has_path(graph: dict[str, list[str]], start: str, end: str) -> bool:
+    def get_connected_events(log: dict[tuple[str, ...], int]) -> set[str]:
         """
-        Determine whether there is a path from 'start' to 'end' in a given graph.
+        Identify all events that are connected through at least one direct-follow relation in the given log.
 
-        Uses breadth-first search on a directed adjacency list to test reachability
-        between two nodes.
+        This includes all events that occur as part of a (source → target) edge, as well as the
+        final event in each trace. Events not appearing in any such context are considered disconnected.
 
         Parameters
         ----------
-        graph : dict[str, list[str]]
-            A dictionary representing the graph where keys are node labels and values
-            are lists of adjacent (reachable) nodes.
-        start : str
-            The starting node.
-        end : str
-            The target node.
+        log : dict[tuple[str, ...], int]
+            A dictionary containing the traces and their frequencies in the log.
+            Each key is a trace represented as a tuple of event labels, and the value is its frequency.
 
         Returns
         -------
-        bool
-            True if a path exists from 'start' to 'end', False otherwise.
+        set[str]
+            A set of event labels that participate in at least one direct-follow transition
+            or occur as the final element of a trace.
         """
-        visited = set()
-        queue = deque([start])
-
-        while queue:
-            node = queue.popleft()
-            if node == end:
-                return True
-            if node not in visited:
-                visited.add(node)
-                queue.extend(graph.get(node, []))
-        return False
+        connected = set()
+        for trace in log:
+            for i in range(len(trace) - 1):
+                connected.add(trace[i])
+                connected.add(trace[i + 1])
+            if trace:
+                connected.add(trace[-1])
+        return connected
 
     def get_node_statistics(self) -> list[dict]:
         """

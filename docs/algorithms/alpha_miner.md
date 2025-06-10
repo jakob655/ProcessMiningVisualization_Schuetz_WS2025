@@ -72,10 +72,21 @@ The Alpha Miner works by analyzing traces (sequences of events) in the event log
 ---
 
 ## Metrics/Filtering
-### SPM Filter (Search Process Quality Metric)
-The SPM filter simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the spm metric, which balances complexity and common behavior. This abstraction helps generate clearer, more interpretable models which is especially useful for user-driven processes like search behavior.
+### SPM Filter (Search Process Model)
+The **SPM filter** simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the spm metric, which balances complexity and common behavior. This abstraction helps generate clearer, more interpretable models which is especially useful for user-driven processes like search behavior.
 
-The SPM value ranges from 0.0 to 1.0 and reflects the semantic quality of a node. It defines the threshold below which nodes are considered low-quality due to low frequency or high complexity, and may be removed for abstraction.
+The **SPM value** ranges from 0.0 to 1.0 and reflects the semantic quality of a node. It defines the threshold below which nodes are considered low-quality due to low frequency or high complexity, and may be removed for abstraction.
+
+*For more information on the SPM metric, see: Marian Lux, Stefanie Rinderle-Ma, Andrei Preda: “Assessing the Quality of Search Process Models.”  
+Available online: https://ucrisportal.univie.ac.at/en/publications/assessing-the-quality-of-search-process-models*
+
+**Node frequency** measures how often each event (node) appears relative to the total number of events in the log. It is calculated after the SPM filtering step. The value lies between 0.0 and 1.0 and helps assess how central a node is in terms of frequency.
+
+The **node frequency** value is in the range of 0.0 to 1.0. It filters out nodes that appear too rarely in the log. Nodes below this threshold are removed after the SPM filtering step.
+
+**Edge frequency** represents how often a direct succession (edge) between two nodes occurs, normalized over all observed transitions. It is used to determine the importance of direct paths in the process.
+
+The **edge frequency** value is in the range of 0.0 to 1.0. It filters out transitions (edges) that occur too infrequently in the log. These edges are removed before utility-based edge filtering is applied.
 
 ---
 

@@ -43,10 +43,10 @@ class InductiveGraph(BaseGraph):
         self.add_start_node()
         self.add_end_node()
 
-        start_node, end_node = self.add_section(process_tree)
-
-        self.add_starting_edges([start_node])
-        self.add_ending_edges([end_node])
+        if process_tree:
+            start_node, end_node = self.add_section(process_tree)
+            self.add_starting_edges([start_node])
+            self.add_ending_edges([end_node])
 
     def add_event(
         self,

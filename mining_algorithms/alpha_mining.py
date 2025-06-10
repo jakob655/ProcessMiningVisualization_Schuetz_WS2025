@@ -97,7 +97,7 @@ class AlphaMining(BaseMining):
 
         self.recalculate_model_filters()
 
-        if not self.node_frequency_filtered_events:
+        if not self.filtered_events:
             # Only show start and end if nothing to visualize
             self.graph.create_edge("Start", "End", penwidth=0.1)
             return
@@ -121,8 +121,8 @@ class AlphaMining(BaseMining):
 
         # Add nodes (events to draw combined with start and end nodes)
         nodes_to_draw = self.__events_to_draw().union(
-            self.start_nodes.intersection(self.node_frequency_filtered_events),
-            self.end_nodes.intersection(self.node_frequency_filtered_events)
+            self.start_nodes.intersection(self.filtered_events),
+            self.end_nodes.intersection(self.filtered_events)
         )
 
         for node in nodes_to_draw:
@@ -233,15 +233,6 @@ class AlphaMining(BaseMining):
 
         # Connect the empty circle to the end node
         self.graph.create_edge("empty_circle_end", "End", penwidth=0.1)
-
-        if not self.has_path(self.graph.adjacency, "Start", "End"):
-            self.graph = AlphaGraph()
-            self.graph.add_start_node()
-            self.graph.add_end_node()
-            self.create_safe_edge("Start", "End")
-            return
-
-
 
     # ALPHA MINER ALGORITHM IMPLEMENTATION END
     ####################################################################################################################

@@ -29,12 +29,22 @@ class InductiveMining(BaseMining):
         self.traces_threshold = 0.2
         self.filtered_log = None
 
-    def generate_graph(self, spm_threshold, node_freq_threshold, edge_freq_threshold, activity_threshold: float,
+    def generate_graph(self, spm_threshold: float, node_freq_threshold: float, edge_freq_threshold: float,
+                       activity_threshold: float,
                        traces_threshold: float):
         """Generate a graph from the log using the Inductive Mining algorithm.
 
         Parameters
         ----------
+        spm_threshold : float
+            The threshold for the SPM (Search Process Model) score. Events with an SPM score below this value
+            will be filtered out before generating the graph.
+        node_freq_threshold : float
+            The threshold for the normalized frequency of nodes (events). Only nodes with a relative frequency
+            equal to or higher than this threshold will be kept.
+        edge_freq_threshold : float
+            The threshold for the normalized frequency of edges (direct event transitions). Only edges with a
+            relative frequency equal to or higher than this threshold will be included in the graph.
         activity_threshold : float
             The activity threshold for the filtering of the log.
             All events with a frequency lower than the threshold * max_event_frequency will be removed.
@@ -45,21 +55,27 @@ class InductiveMining(BaseMining):
         self.activity_threshold = activity_threshold
         self.traces_threshold = traces_threshold
         self.spm_threshold = spm_threshold
+        self.node_freq_threshold = node_freq_threshold
+        self.edge_freq_threshold = edge_freq_threshold
 
         self.recalculate_model_filters()
 
-        self.node_sizes = {k: self.calculate_node_size(k) for k in self.spm_filtered_events}
+        if not self.filtered_events:
+            self.graph = InductiveGraph(self.filtered_events)
+            self.graph.add_edge("Start", "End", None)
+            return
+
+        self.node_sizes = {k: self.calculate_node_size(k) for k in self.filtered_events}
 
         events_to_remove = self.get_events_to_remove(activity_threshold)
 
         self.logger.debug(f"Events to remove: {events_to_remove}")
         min_traces_frequency = self.calculate_minimum_traces_frequency(traces_threshold)
 
-        filtered_log = filter_traces(self.spm_filtered_log, min_traces_frequency)
+        filtered_log = filter_traces(self.node_frequency_filtered_log, min_traces_frequency)
         filtered_log = filter_events(filtered_log, events_to_remove)
-
-        if filtered_log == self.filtered_log:
-            return
+        filtered_log = self._filter_edges_by_frequency(filtered_log)
+        filtered_log = self._append_disconnected_nodes_as_traces(filtered_log)
 
         self.filtered_log = filtered_log
 
@@ -95,7 +111,7 @@ class InductiveMining(BaseMining):
             return tree
 
         if tuple() not in log:
-            if partitions := self.calulate_cut(log):
+            if partitions := self.calculate_cut(log):
                 self.logger.debug(f"Cut: {partitions}")
                 operation = partitions[0]
                 return (operation, *list(map(self.inductive_mining, partitions[1:])))
@@ -130,7 +146,7 @@ class InductiveMining(BaseMining):
 
         return None
 
-    def calulate_cut(self, log) -> tuple | None:
+    def calculate_cut(self, log) -> tuple | None:
         """Find a partitioning of the log using the different cut methods.
         The cut methods are:
         - exclusive_cut
@@ -213,7 +229,7 @@ class InductiveMining(BaseMining):
         set[str]
             A set containing all unique events in the log.
         """
-        return set(event for case in log for event in case if event in self.spm_filtered_events)
+        return set(event for case in log for event in case if event in self.filtered_events)
 
     def get_activity_threshold(self) -> float:
         """Get the activity threshold used for filtering the log.
@@ -234,3 +250,64 @@ class InductiveMining(BaseMining):
             The traces threshold
         """
         return self.traces_threshold
+
+    def _filter_edges_by_frequency(self, log: dict[tuple[str, ...], int]) -> dict[tuple[str, ...], int]:
+        """
+        Filter the directly-follows relations in the log based on edge frequency threshold.
+
+        Edges (event transitions) with a normalized frequency below `edge_freq_threshold`
+        are removed from the traces. The result is a new log where such edges are excluded.
+
+        Parameters
+        ----------
+        log : dict[tuple[str, ...], int]
+            A dictionary containing the traces and their frequencies.
+
+        Returns
+        -------
+        dict[tuple[str, ...], int]
+            A dictionary containing filtered traces where only edges meeting the frequency threshold are retained.
+        """
+        filtered_log = {}
+
+        for trace, freq in log.items():
+            new_trace = []
+            for i, event in enumerate(trace[:-1]):
+                if self.filter_edge(event, trace[i + 1]):
+                    new_trace.append(event)
+
+            if new_trace:
+                new_trace.append(trace[-1])
+                filtered_log[tuple(new_trace)] = freq
+
+        return filtered_log
+
+    def _append_disconnected_nodes_as_traces(self, filtered_log: dict[tuple[str, ...], int]) -> dict[
+        tuple[str, ...], int]:
+        """
+        Reintroduce events that have been filtered out due to low edge frequency but are still valid,
+        by appending them as isolated start-end traces.
+
+        This ensures consistent handling of disconnected nodes.
+
+        Parameters
+        ----------
+        filtered_log : dict[tuple[str, ...], int]
+            The log after edge-based filtering.
+
+        Returns
+        -------
+        dict[tuple[str, ...], int]
+            The log with disconnected but valid events added back as individual traces.
+        """
+        valid_events = set(self.filtered_events)
+        connected_events = self.get_connected_events(filtered_log)
+
+        disconnected_nodes = valid_events - connected_events
+        self.logger.debug(f"Disconnected nodes to be added as separate traces: {disconnected_nodes}")
+
+        for node in disconnected_nodes:
+            freq = self.filtered_appearance_freqs.get(node, 1)
+            filtered_log[(node,)] = freq
+
+        return filtered_log
