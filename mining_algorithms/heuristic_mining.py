@@ -37,11 +37,24 @@ class HeuristicMining(BaseMining):
             dependency_threshold, min_frequency
         )
 
+        node_stats_map = {stat["node"]: stat for stat in self.get_node_statistics()}
+
         # add nodes to graph
         for node in self.filtered_events:
-            node_freq = self.filtered_appearance_freqs.get(node)
             w, h = self.calculate_node_size(node)
-            self.graph.add_event(node, node_freq, (w, h))
+            stat = node_stats_map.get(node, {})
+            spm = stat.get("spm", 0.0)
+            freq = stat.get("frequency", 0.0)
+            abs_freq = self.filtered_appearance_freqs.get(node, 0)
+
+            self.graph.add_event(
+                title=node,
+                spm=spm,
+                frequency=freq,
+                absolute_frequency=abs_freq,
+                size=(w, h)
+            )
+
 
         # cluster the edge thickness sizes based on frequency
         if self.dependency_matrix.any():
@@ -60,7 +73,13 @@ class HeuristicMining(BaseMining):
                 row_total = row_total + dependency_graph[j][i]
                 source = self.filtered_events[i]
                 target = self.filtered_events[j]
+
+                edge_stats = self.get_edge_statistics()
+                edge_stats_map = {(edge["source"], edge["target"]): edge for edge in edge_stats}
+
                 if dependency_graph[i][j] == 1.:
+                    freq = edge_stats_map.get((source, target), {}).get("frequency", 0.0)
+                    weight = int(self.filtered_succession_matrix[i][j])
                     if dependency_threshold == 0:
                         edge_thickness = 0.1
                     else:
@@ -69,10 +88,11 @@ class HeuristicMining(BaseMining):
                                                  self.dependency_matrix[i][j])] + self.min_edge_thickness
 
                     self.graph.create_edge(
-                        source=str(source),
-                        destination=str(target),
+                        source=source,
+                        destination=target,
                         size=edge_thickness,
-                        weight=int(self.filtered_succession_matrix[i][j])
+                        frequency=freq,
+                        weight=weight
                     )
 
                 if j == len(self.filtered_events) - 1 and column_total == 0 and \

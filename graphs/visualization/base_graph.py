@@ -89,10 +89,11 @@ class Edge:
     """Edge class for the graph. Each edge has a source, a destination and a weight."""
 
     def __init__(
-        self,
-        source: str | int,
-        destination: str | int,
-        weight: int = 1,
+            self,
+            source: str | int,
+            destination: str | int,
+            weight: int = 1,
+            data: dict[str, str | int | float] | None = None,
     ) -> None:
         """Initializes the Edge object.
 
@@ -104,10 +105,13 @@ class Edge:
             destination node id
         weight : int, optional
             weight of the edge, by default 1
+        data : dict[str, str | int | float] | None, optional
+            Additional data attached to the edge, by default None
         """
         self.source = str(source)
         self.destination = str(destination)
         self.weight = weight
+        self.data = data
 
     def get_edge(self) -> tuple[str, str, int]:
         """Returns the source, destination and weight of the edge.
@@ -118,6 +122,16 @@ class Edge:
             The source, destination and weight of the edge.
         """
         return (self.source, self.destination, self.weight)
+
+    def get_data(self) -> dict[str, str | int | float] | None:
+        """Return the data attached to the edge."""
+        return self.data
+
+    def get_data_from_key(self, key: str) -> str | int | float | None:
+        """Return the value stored under ``key`` in the edge data if present."""
+        if not self.data:
+            return None
+        return self.data.get(key)
 
 
 class BaseGraph:
@@ -283,11 +297,12 @@ class BaseGraph:
                 self.add_edge(node, ending_node, weight=None, **edge_attributes)
 
     def add_edge(
-        self,
-        source_id: str | int,
-        target_id: str | int,
-        weight: int = 1,
-        **edge_attributes,
+            self,
+            source_id: str | int,
+            target_id: str | int,
+            weight: int = 1,
+            data: dict[str, str | int | float] | None = None,
+            **edge_attributes,
     ) -> None:
         """Adds an edge to the graph.
 
@@ -299,6 +314,8 @@ class BaseGraph:
             target node id
         weight : int, optional
             weight of the edge, by default 1
+        data : dict[str, str | int | float] | None, optional
+            Additional data attached to the edge, by default None
 
         Raises
         ------
@@ -316,7 +333,7 @@ class BaseGraph:
         if self.contains_edge(source_id, target_id):
             raise DuplicateEdgeException(source_id, target_id)
 
-        edge = Edge(source_id, target_id, weight)
+        edge = Edge(source_id, target_id, weight, data=data)
         self.edges[(edge.source, edge.destination)] = edge
 
         if weight == None:
@@ -488,6 +505,30 @@ class BaseGraph:
             for key, value in node.get_data().items():
                 description += f"\n**{key}:** {value}"
         return node.get_id(), description
+
+    def edge_to_string(self, source: str, destination: str) -> tuple[str, str]:
+        """Return a textual representation for the edge connecting source and destination.
+        Can be overridden in child classes for custom formatting.
+
+        Parameters
+        ----------
+        source : str
+            The source node id.
+        destination : str
+            The destination node id.
+
+        Returns
+        -------
+        tuple[str, str]
+            The edge name and a description containing weight and stored edge_data.
+        """
+        edge = self.get_edge(source, destination)
+        name = f"{edge.source}->{edge.destination}"
+        description = f"**Edge:** {edge.source} -> {edge.destination}"
+        if edge.get_data():
+            for key, value in edge.get_data().items():
+                description += f"\n**{key}:** {value}"
+        return name, description
 
     def substitiute_colons(self, string: str) -> str:
         """Replaces the colon with the colon substitute in the string.

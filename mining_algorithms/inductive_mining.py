@@ -72,19 +72,23 @@ class InductiveMining(BaseMining):
         self.logger.debug(f"Events to remove: {events_to_remove}")
         min_traces_frequency = self.calculate_minimum_traces_frequency(traces_threshold)
 
-        filtered_log = filter_traces(self.node_frequency_filtered_log, min_traces_frequency)
-        filtered_log = filter_events(filtered_log, events_to_remove)
-        filtered_log = self._filter_edges_by_frequency(filtered_log)
-        filtered_log = self._append_disconnected_nodes_as_traces(filtered_log)
+        filtered_log_before_edges = filter_traces(self.node_frequency_filtered_log, min_traces_frequency)
+        filtered_log_before_edges = filter_events(filtered_log_before_edges, events_to_remove)
+        filtered_log, disconnected = self._filter_edges_by_frequency(filtered_log_before_edges)
+        filtered_log = self._append_disconnected_nodes_as_traces(filtered_log, disconnected)
 
         self.filtered_log = filtered_log
 
         self.logger.info("Start Inductive Mining")
         process_tree = self.inductive_mining(self.filtered_log)
+        node_stats_map = {stat["node"]: stat for stat in self.get_node_statistics()}
+        edge_stats_map = {(edge["source"], edge["target"]): edge for edge in self.get_edge_statistics()}
         self.graph = InductiveGraph(
             process_tree,
             frequency=self.filtered_appearance_freqs,
             node_sizes=self.node_sizes,
+            node_stats_map=node_stats_map,
+            edge_stats_map=edge_stats_map
         )
 
     def inductive_mining(self, log):
@@ -256,7 +260,8 @@ class InductiveMining(BaseMining):
         Filter the directly-follows relations in the log based on edge frequency threshold.
 
         Edges (event transitions) with a normalized frequency below `edge_freq_threshold`
-        are removed from the traces. The result is a new log where such edges are excluded.
+        are removed from the traces. Additionally, all nodes that become disconnected due to removed edges
+        are tracked for potential reinsertion later.
 
         Parameters
         ----------
@@ -265,48 +270,67 @@ class InductiveMining(BaseMining):
 
         Returns
         -------
-        dict[tuple[str, ...], int]
-            A dictionary containing filtered traces where only edges meeting the frequency threshold are retained.
+        tuple[dict[tuple[str, ...], int], set[str]]
+            A tuple containing:
+            - The filtered log where only edges meeting the frequency threshold are retained.
+            - A set of nodes that became disconnected due to edge filtering.
         """
+        if self.edge_freq_threshold <= 0.0:
+            self.logger.debug("[_filter_edges_by_frequency] Skipping filtering due to 0.0 threshold")
+            return log, set()
+
         filtered_log = {}
+        dropped_events = set()
 
         for trace, freq in log.items():
-            new_trace = []
-            for i, event in enumerate(trace[:-1]):
-                if self.filter_edge(event, trace[i + 1]):
-                    new_trace.append(event)
+            new_trace = [trace[0]] if trace else []
+            for i in range(len(trace) - 1):
+                source, target = trace[i], trace[i + 1]
+                passes_filter = self.filter_edge(source, target)
+                self.logger.debug(f"[_filter_edges_by_frequency] {source} → {target} | Passes: {passes_filter}")
 
-            if new_trace:
-                new_trace.append(trace[-1])
+                if passes_filter:
+                    new_trace.append(target)
+                else:
+                    self.logger.debug(f"[_filter_edges_by_frequency] Dropping edge {source} → {source}")
+                    dropped_events.update([source, target])
+
+            if len(new_trace) > 1:
                 filtered_log[tuple(new_trace)] = freq
+            elif len(new_trace) == 1:
+                # Retain single-node traces if they still make sense
+                filtered_log[(new_trace[0],)] = freq
 
-        return filtered_log
+        return filtered_log, dropped_events
 
-    def _append_disconnected_nodes_as_traces(self, filtered_log: dict[tuple[str, ...], int]) -> dict[
-        tuple[str, ...], int]:
+    def _append_disconnected_nodes_as_traces(self, filtered_log: dict[tuple[str, ...], int],
+                                             edge_filtered_nodes: set[str]) -> dict[tuple[str, ...], int]:
         """
-        Reintroduce events that have been filtered out due to low edge frequency but are still valid,
-        by appending them as isolated start-end traces.
+        Reintroduce nodes that were disconnected due to edge filtering as isolated traces.
 
-        This ensures consistent handling of disconnected nodes.
+        Events removed from the graph structure because all of their connecting edges were filtered out
+        are added back as individual traces. This ensures these nodes are still represented in the process model.
 
         Parameters
         ----------
         filtered_log : dict[tuple[str, ...], int]
             The log after edge-based filtering.
 
+        edge_filtered_nodes : set[str]
+            A set of nodes that became disconnected due to edge filtering.
+
         Returns
         -------
         dict[tuple[str, ...], int]
-            The log with disconnected but valid events added back as individual traces.
+            The log with disconnected but valid events re-added as single-node traces.
         """
-        valid_events = set(self.filtered_events)
         connected_events = self.get_connected_events(filtered_log)
+        disconnected_events = edge_filtered_nodes - connected_events
 
-        disconnected_nodes = valid_events - connected_events
-        self.logger.debug(f"Disconnected nodes to be added as separate traces: {disconnected_nodes}")
+        self.logger.debug(
+            f"[_append_disconnected_nodes_as_traces] Disconnected events to re-added as individual traces: {disconnected_events}")
 
-        for node in disconnected_nodes:
+        for node in disconnected_events:
             freq = self.filtered_appearance_freqs.get(node, 1)
             filtered_log[(node,)] = freq
 

@@ -137,6 +137,7 @@ class BaseAlgorithmView(BaseView):
                 interactiveGraph(
                     graph,
                     onNodeClick=self.display_node_info,
+                    onEdgeClick=self.display_edge_info,
                     height=self.graph_height,
                 )
 
@@ -167,6 +168,23 @@ class BaseAlgorithmView(BaseView):
         with self.node_data_container:
             with st.expander(f"Node: {node_name}"):
                 for line in node_description.split("\n"):
+                    st.write(line)
+
+    def display_edge_info(self, source: str, target: str, description: str) -> None:
+        """Displays the information of an edge in the node data container.
+
+        Parameters
+        ----------
+        source : str
+            The source node of the edge.
+        target : str
+            The target node of the edge.
+        description : str
+            The description of the edge.
+        """
+        with self.node_data_container:
+            with st.expander(f"Edge: {source} -> {target}"):
+                for line in description.split("\n"):
                     st.write(line)
 
     def display_page_title(self, title: str) -> None:

@@ -20,36 +20,39 @@ else:
 
 
 def interactiveGraph(
-    graph: BaseGraph, onNodeClick, key="interactiveGraph", height=600
+        graph: BaseGraph, onNodeClick, onEdgeClick, key="interactiveGraph", height=600
 ) -> None:
-    """Wrapper function for the interactiveGraph component
-
-    Parameters
-    ----------
-    graph : BaseGraph
-        graph object to be displayed
-    onNodeClick : function
-        function to be called when a node is clicked
-    key : int | str, optional
-        key value for the component. needed if multiple components are displayed on the same page , by default None
-    height : int, optional
-        height of the component, by default 600
-    """
-
     state_name = f"previous_clickId-{key}"
+    edge_state_name = f"previous_edgeClickId-{key}"
 
     if state_name not in st.session_state:
         st.session_state[state_name] = ""
+    if edge_state_name not in st.session_state:
+        st.session_state[edge_state_name] = ""
 
     component_value = _component_func(
         graphviz_string=graph.get_graphviz_string(), key=key, height=height
     )
+
     del st.session_state[key]
+
     if (
         component_value is not None
-        and component_value["clickId"] != ""
+        and component_value.get("clickId", "") != ""
         and component_value["clickId"] != st.session_state[state_name]
     ):
         st.session_state[state_name] = component_value["clickId"]
         node_name, description = graph.node_to_string(component_value["nodeId"])
         onNodeClick(node_name, description)
+
+    if (
+        component_value is not None
+        and component_value.get("edgeClickId", "") != ""
+        and component_value["edgeClickId"] != st.session_state[edge_state_name]
+    ):
+        st.session_state[edge_state_name] = component_value["edgeClickId"]
+        source = component_value.get("source", "")
+        target = component_value.get("target", "")
+
+        edge_description = graph.edge_to_string(source, target)
+        onEdgeClick(source, target, edge_description)

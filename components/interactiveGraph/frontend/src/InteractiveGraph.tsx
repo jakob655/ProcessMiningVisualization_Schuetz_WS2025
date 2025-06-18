@@ -13,6 +13,12 @@ type nodeClickData = {
   nodeId: string
 }
 
+type edgeClickData = {
+  edgeClickId: string
+  source: string
+  target: string
+}
+
 const InteractiveGraph: React.FC<ComponentProps> = ({ args }) => {
   const dot_source = args["graphviz_string"]
   const key = args["key"]
@@ -21,6 +27,11 @@ const InteractiveGraph: React.FC<ComponentProps> = ({ args }) => {
   const [nodeClickData, setNodeClickData] = useState<nodeClickData>({
     clickId: "",
     nodeId: "",
+  })
+  const [edgeClickData, setEdgeClickData] = useState<edgeClickData>({
+    edgeClickId: "",
+    source: "",
+    target: "",
   })
   const [width, setWidth] = useState(0)
 
@@ -39,6 +50,16 @@ const InteractiveGraph: React.FC<ComponentProps> = ({ args }) => {
       setNodeClickData({
         clickId: uuidv4(),
         nodeId: node_id,
+      })
+    })
+    selectAll(".edge").on("click", (event) => {
+      event.preventDefault()
+      const titleText = select(event.currentTarget).select("title").text()
+      const [src, tgt] = titleText.split("->")
+      setEdgeClickData({
+        edgeClickId: uuidv4(),
+        source: src,
+        target: tgt,
       })
     })
     setIsRendering(false)
@@ -97,6 +118,10 @@ const InteractiveGraph: React.FC<ComponentProps> = ({ args }) => {
   useEffect(() => {
     Streamlit.setComponentValue(nodeClickData)
   }, [nodeClickData])
+
+  useEffect(() => {
+    Streamlit.setComponentValue(edgeClickData)
+  }, [edgeClickData])
 
   return (
     <div

@@ -1,4 +1,5 @@
 from graphs.visualization.fuzzy_graph import FuzzyGraph
+import math
 import numpy as np
 from mining_algorithms.base_mining import BaseMining
 from logger import get_logger
@@ -51,7 +52,7 @@ class FuzzyMining(BaseMining):
         if not self.filtered_events:
             self.graph.add_start_node()
             self.graph.add_end_node()
-            self.graph.create_edge("Start", "End", 0.1)
+            self.graph.create_edge("Start", "End")
             return
 
         self._calculate_filtered_model_state()
@@ -369,16 +370,18 @@ class FuzzyMining(BaseMining):
     def __add_edges_to_graph_for_each_method(
             self, edges, graph, node_to_node_case
     ):
-        edge_thickness = 0.1
         for pair, value in edges.items():
             current_cluster = pair[0]
             next_cluster = pair[1]
+
+            frequency = self.edge_frequencies.get((pair[0], pair[1]), 0.0)
+
             if node_to_node_case:
                 if not self.filter_edge(current_cluster, next_cluster):
                     continue
 
                 self.graph.create_edge(
-                    current_cluster, next_cluster, edge_thickness, value
+                    current_cluster, next_cluster, frequency
                 )
             else:
                 if current_cluster in self.cluster_id_mapping:
@@ -388,7 +391,7 @@ class FuzzyMining(BaseMining):
                     next_cluster = self.cluster_id_mapping.get(next_cluster)
 
                 self.graph.create_edge(
-                    current_cluster, next_cluster, edge_thickness, value, "red"
+                    current_cluster, next_cluster, frequency, "red"
                 )
 
     def __add_edges_to_graph(
@@ -587,11 +590,15 @@ class FuzzyMining(BaseMining):
         nodes_after_first_rule,
         list_of_clustered_nodes,
     ):
+        node_stats_map = {stat["node"]: stat for stat in self.get_node_statistics()}
         for node in nodes_after_first_rule:
             if node not in list_of_clustered_nodes:
                 w, h = self.calculate_node_size(node)
+                stats = node_stats_map.get(node, {})
+                spm = stats.get("spm", 0.0)
+                frequency = stats.get("frequency", 0.0)
                 node_sign = self.sign_dict.get(node)
-                self.graph.add_event(node, node_sign, (w, h))
+                self.graph.add_event(node, spm, frequency, node_sign, (w, h))
 
     def __convert_clustered_nodes_to_list(self, clustered_nodes):
         ret_nodes = []
