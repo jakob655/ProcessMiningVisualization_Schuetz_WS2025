@@ -16,7 +16,7 @@ class HeuristicGraph(BaseGraph):
             self,
             title: str,
             spm: float,
-            frequency: float,
+            normalized_frequency: float,
             absolute_frequency: int,
             size: tuple[int, int],
             **event_data,
@@ -29,8 +29,8 @@ class HeuristicGraph(BaseGraph):
             name of the event
         spm : float
             spm value of the event
-        frequency : float
-            frequency of the event
+        normalized_frequency : float
+            normalized frequency of the event
         absolute_frequency : int
             absolute frequency of the event
         size : tuple[int, int]
@@ -38,12 +38,12 @@ class HeuristicGraph(BaseGraph):
         **event_data
             additional data for the event
         """
-        event_data["spm"] = spm
-        event_data["frequency"] = frequency
-        event_data["absolute_frequency"] = absolute_frequency
+        event_data["SPM value"] = spm
+        event_data["Frequency *(normalized)*"] = normalized_frequency
+        event_data["Frequency *(absolute)*"] = absolute_frequency
         rounded_freq = None
-        if frequency:
-            rounded_freq = math.ceil(frequency * 100) / 100
+        if normalized_frequency:
+            rounded_freq = math.floor(normalized_frequency * 100) / 100
         label = f'<{title}<br/><font color="red">{rounded_freq:.2f}</font>>'
         width, height = size
         super().add_node(
@@ -62,8 +62,8 @@ class HeuristicGraph(BaseGraph):
             source: str,
             destination: str,
             size: float,
-            frequency: float = None,
-            weight: int = None,
+            normalized_frequency: float = None,
+            absolute_frequency: int = None,
             color: str = "black",
             **edge_data
     ) -> None:
@@ -77,10 +77,10 @@ class HeuristicGraph(BaseGraph):
             destination node id
         size : float
             size/penwidth of the edge
-        frequency : float
-            frequency of the edge
-        weight : int, optional
-            weight of the edge, by default None
+        normalized_frequency : float, optional
+            normalized frequency of the edge, by default None
+        absolute_frequency : int, optional
+            absolute frequency of the edge, by default None
         color : str, optional
             color of the edge, by default "black"
         **edge_data
@@ -88,35 +88,8 @@ class HeuristicGraph(BaseGraph):
         """
         # add dependency threshold for expander on-click
         rounded_freq = None
-        if frequency:
-            rounded_freq = math.ceil(frequency * 100) / 100
-        edge_data["frequency"] = frequency
-        edge_data["weight"] = weight
+        if normalized_frequency:
+            rounded_freq = math.floor(normalized_frequency * 100) / 100
+        edge_data["Frequency *(normalized)*"] = normalized_frequency
+        edge_data["Frequency *(absolute)*"] = absolute_frequency
         super().add_edge(source, destination, rounded_freq, penwidth=str(size), color=color, data=edge_data)
-
-    def node_to_string(self, id: str) -> tuple[str, str]:
-        """Return the node name/id and description for the given node id.
-
-        Parameters
-        ----------
-        id : str
-            id of the node
-
-        Returns
-        -------
-        tuple[str, str]
-            node name/id and description.
-        """
-        node = self.get_node(id)
-        description = ""
-
-        if spm := node.get_data_from_key("spm"):
-            description = f"{description}\n**SPM value:** {spm}"
-
-        if frequency := node.get_data_from_key("frequency"):
-            description = f"{description}\n**Frequency:** {frequency}"
-
-        if absolute_frequency := node.get_data_from_key("absolute_frequency"):
-            description = f"""{description}\n**Absolute Frequency:** {absolute_frequency}"""
-
-        return node.get_id(), description

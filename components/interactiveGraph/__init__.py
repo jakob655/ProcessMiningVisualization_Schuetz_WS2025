@@ -1,6 +1,8 @@
 import os
-import streamlit.components.v1 as components
+
 import streamlit as st
+import streamlit.components.v1 as components
+
 from graphs.visualization.base_graph import BaseGraph
 
 # Template for the component from https://docs.streamlit.io/library/components/publish and https://github.com/streamlit/component-template/tree/master/template/my_component

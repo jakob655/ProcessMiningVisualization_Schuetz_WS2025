@@ -1,7 +1,8 @@
 import numpy as np
+
 from graphs.visualization.heuristic_graph import HeuristicGraph
-from mining_algorithms.base_mining import BaseMining
 from logger import get_logger
+from mining_algorithms.base_mining import BaseMining
 
 
 class HeuristicMining(BaseMining):
@@ -13,12 +14,10 @@ class HeuristicMining(BaseMining):
 
         # Graph modifiers
         self.min_edge_thickness = 1
-        self.min_frequency = 0
         self.dependency_threshold = 0.5
 
     def generate_graph(
-            self, spm_threshold, node_freq_threshold, edge_freq_threshold, dependency_threshold, min_frequency
-    ):
+            self, spm_threshold, node_freq_threshold, edge_freq_threshold, dependency_threshold):
         self.graph = HeuristicGraph()
 
         self.start_nodes = self._get_start_nodes()
@@ -28,33 +27,40 @@ class HeuristicMining(BaseMining):
         self.node_freq_threshold = node_freq_threshold
         self.edge_freq_threshold = edge_freq_threshold
         self.dependency_threshold = dependency_threshold
-        self.min_frequency = min_frequency
 
         self.recalculate_model_filters()
         self.dependency_matrix = self.__create_dependency_matrix()
 
-        dependency_graph = self.__create_dependency_graph(
-            dependency_threshold, min_frequency
-        )
+        dependency_graph = self.__create_dependency_graph(dependency_threshold)
 
         node_stats_map = {stat["node"]: stat for stat in self.get_node_statistics()}
+
+        self.graph.add_start_node()
+        self.graph.add_end_node()
+
+        if not self.filtered_events:
+            self.graph.create_edge(
+                source=str("Start"),
+                destination=str("End"),
+                size=0.1,
+            )
+            return
 
         # add nodes to graph
         for node in self.filtered_events:
             w, h = self.calculate_node_size(node)
             stat = node_stats_map.get(node, {})
             spm = stat.get("spm", 0.0)
-            freq = stat.get("frequency", 0.0)
+            norm_freq = stat.get("frequency", 0.0)
             abs_freq = self.filtered_appearance_freqs.get(node, 0)
 
             self.graph.add_event(
                 title=node,
                 spm=spm,
-                frequency=freq,
+                normalized_frequency=norm_freq,
                 absolute_frequency=abs_freq,
                 size=(w, h)
             )
-
 
         # cluster the edge thickness sizes based on frequency
         if self.dependency_matrix.any():
@@ -78,8 +84,8 @@ class HeuristicMining(BaseMining):
                 edge_stats_map = {(edge["source"], edge["target"]): edge for edge in edge_stats}
 
                 if dependency_graph[i][j] == 1.:
-                    freq = edge_stats_map.get((source, target), {}).get("frequency", 0.0)
-                    weight = int(self.filtered_succession_matrix[i][j])
+                    norm_frequency = edge_stats_map.get((source, target), {}).get("normalized_frequency", 0.0)
+                    abs_frequency = edge_stats_map.get((source, target), {}).get("absolute_frequency", 0)
                     if dependency_threshold == 0:
                         edge_thickness = 0.1
                     else:
@@ -91,8 +97,8 @@ class HeuristicMining(BaseMining):
                         source=source,
                         destination=target,
                         size=edge_thickness,
-                        frequency=freq,
-                        weight=weight
+                        normalized_frequency=norm_frequency,
+                        absolute_frequency=abs_frequency
                     )
 
                 if j == len(self.filtered_events) - 1 and column_total == 0 and \
@@ -101,17 +107,6 @@ class HeuristicMining(BaseMining):
                 if j == len(self.filtered_events) - 1 and row_total == 0 and \
                         self.filtered_events[i] not in self.start_nodes:
                     self.start_nodes.add(self.filtered_events[i])
-
-        # add start and end nodes
-        self.graph.add_start_node()
-        self.graph.add_end_node()
-
-        if not self.filtered_events:
-            self.graph.create_edge(
-                source=str("Start"),
-                destination=str("End"),
-                size=0.1,
-            )
 
         # add starting and ending edges from the log to the graph. Only if they are filtered
         self.graph.add_starting_edges(self.start_nodes.intersection(self.filtered_events))
@@ -129,18 +124,8 @@ class HeuristicMining(BaseMining):
         self.graph.add_starting_edges(source_nodes - self.start_nodes)
         self.graph.add_ending_edges(sink_nodes - self.end_nodes)
 
-    def get_min_frequency(self):
-        return self.min_frequency
-
     def get_threshold(self):
         return self.dependency_threshold
-
-    def get_max_frequency(self):
-        max_freq = 0
-        for value in (self.filtered_appearance_freqs.values()):
-            if value > max_freq:
-                max_freq = value
-        return max(max_freq, 1)
 
     def __create_dependency_matrix(self):
         dependency_matrix = np.zeros(self.filtered_succession_matrix.shape)
@@ -160,7 +145,7 @@ class HeuristicMining(BaseMining):
             y += 1
         return dependency_matrix
 
-    def __create_dependency_graph(self, dependency_threshold, min_frequency):
+    def __create_dependency_graph(self, dependency_threshold):
         dependency_graph = np.zeros(self.dependency_matrix.shape)
         y = 0
         for row in dependency_graph:
@@ -170,7 +155,6 @@ class HeuristicMining(BaseMining):
 
                 if (
                         self.dependency_matrix[y][x] >= dependency_threshold and
-                        self.filtered_succession_matrix[y][x] >= min_frequency and
                         self.filter_edge(a, b)
                 ):
                     dependency_graph[y][x] += 1

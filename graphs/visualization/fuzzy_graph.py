@@ -1,5 +1,6 @@
-from graphs.visualization.base_graph import BaseGraph
 import math
+
+from graphs.visualization.base_graph import BaseGraph
 
 
 class FuzzyGraph(BaseGraph):
@@ -15,7 +16,8 @@ class FuzzyGraph(BaseGraph):
             self,
             title: str,
             spm: float,
-            frequency: float,
+            normalized_frequency: float,
+            absolute_frequency: int,
             significance: int,
             size: tuple[int, int],
             **event_data,
@@ -28,8 +30,10 @@ class FuzzyGraph(BaseGraph):
             name of the event
         spm : float
             spm value of the event
-        frequency : float
-            frequency of the event
+        normalized_frequency : float
+            normalized frequency of the event
+        absolute_frequency : int
+            absolute frequency of the event
         significance : int
             significance of the event
         size : tuple[int, int]
@@ -37,12 +41,13 @@ class FuzzyGraph(BaseGraph):
         **event_data
             additional data for the event
         """
-        event_data["spm"] = spm
-        event_data["frequency"] = frequency
-        event_data["significance"] = significance
+        event_data["SPM value"] = spm
+        event_data["Frequency *(normalized)*"] = normalized_frequency
+        event_data["Frequency *(absolute)*"] = absolute_frequency
+        event_data["Significance"] = significance
         rounded_freq = None
-        if frequency:
-            rounded_freq = math.ceil(frequency * 100) / 100
+        if normalized_frequency:
+            rounded_freq = math.ceil(normalized_frequency * 100) / 100
         label = f'<{title}<br/><font color="red">{rounded_freq:.2f}</font>>'
         width, height = size
         super().add_node(
@@ -60,7 +65,9 @@ class FuzzyGraph(BaseGraph):
             self,
             source: str,
             destination: str,
-            frequency: float = None,
+            normalized_frequency: float = None,
+            absolute_frequency: int = None,
+            significance: float = None,
             color: str = "black",
             **edge_data
     ) -> None:
@@ -74,20 +81,23 @@ class FuzzyGraph(BaseGraph):
             destination node id
         size : float
             size/penwidth of the edge
-        frequency : float
-            frequency of the edge
-        weight : int, optional
-            weight of the edge, by default None
+        normalized_frequency : float, optional
+            normalized frequency of the edge
+        absolute_frequency : float, optional
+            absolute frequency of the edge
+        significance : float, optional
+            significance of the edge
         color : str, optional
             color of the edge, by default "black"
         **edge_data
             additional data for the edge
         """
-        # add binary significance for expander on-click
         rounded_freq = None
-        if frequency:
-            rounded_freq = math.ceil(frequency * 100) / 100
-        edge_data["frequency"] = frequency
+        if normalized_frequency:
+            rounded_freq = math.ceil(normalized_frequency * 100) / 100
+        edge_data["Frequency *(normalized)*"] = normalized_frequency
+        edge_data["Frequency *(absolute)*"] = absolute_frequency
+        edge_data["Significance"] = significance
         super().add_edge(source, destination, rounded_freq, penwidth=str(rounded_freq), color=color, data=edge_data)
 
     def add_cluster(
@@ -146,13 +156,19 @@ class FuzzyGraph(BaseGraph):
         if "cluster" in node_name.lower():
             description = f"**Cluster:** {node_name}"
 
-        if spm := node.get_data_from_key("spm"):
+        if spm := node.get_data_from_key("SPM value"):
+            spm = f"{float(spm):.2f}"
             description = f"{description}\n**SPM value:** {spm}"
 
-        if frequency := node.get_data_from_key("frequency"):
-            description = f"{description}\n**Frequency:** {frequency}"
+        if normalized_frequency := node.get_data_from_key("Frequency *(normalized)*"):
+            normalized_frequency = f"{float(normalized_frequency):.2f}"
+            description = f"{description}\n**Frequency *(normalized)*:** {normalized_frequency}"
 
-        if significance := node.get_data_from_key("significance"):
+        if absolute_frequency := node.get_data_from_key("Frequency *(absolute)*"):
+            description = f"{description}\n**Frequency *(absolute)*:** {absolute_frequency}"
+
+        if significance := node.get_data_from_key("Significance"):
+            significance = f"{float(significance):.2f}"
             description = f"""{description}\n**Significance:** {significance}"""
 
         if nodes := node.get_data_from_key("nodes"):

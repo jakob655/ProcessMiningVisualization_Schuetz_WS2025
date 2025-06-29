@@ -1,6 +1,7 @@
 import itertools
-from logger import get_logger
+
 from graphs.visualization.alpha_graph import AlphaGraph
+from logger import get_logger
 from mining_algorithms.base_mining import BaseMining
 
 
@@ -84,7 +85,7 @@ class AlphaMining(BaseMining):
         return yl_set
 
     # Step 6
-    def generate_graph(self, spm_threshold, node_freq_threshold, edge_freq_threshold):
+    def generate_graph(self, spm_threshold, node_freq_threshold):
         self.graph = AlphaGraph()
 
         self.graph.add_start_node()
@@ -93,7 +94,6 @@ class AlphaMining(BaseMining):
 
         self.spm_threshold = spm_threshold
         self.node_freq_threshold = node_freq_threshold
-        self.edge_freq_threshold = edge_freq_threshold
 
         self.recalculate_model_filters()
 
@@ -116,7 +116,9 @@ class AlphaMining(BaseMining):
             # treat each start_node (also end_node in this case) as a standalone unit from Start to End
             for start_end_node in self.start_nodes:
                 stats = node_stats_map.get(start_end_node, {})
-                self.graph.add_event(str(start_end_node), spm=stats["spm"], frequency=stats["frequency"])
+                abs_freq = self.filtered_appearance_freqs.get(start_end_node, 0)
+                self.graph.add_event(str(start_end_node), spm=stats["spm"], normalized_frequency=stats["frequency"],
+                                     absolute_frequency=abs_freq)
                 self.graph.create_edge("empty_circle_start", str(start_end_node))
                 self.graph.create_edge(str(start_end_node), "empty_circle_end")
             self.graph.create_edge("empty_circle_end", "End")
@@ -130,7 +132,9 @@ class AlphaMining(BaseMining):
 
         for node in nodes_to_draw:
             stats = node_stats_map.get(node, {})
-            self.graph.add_event(str(node), spm=stats["spm"], frequency=stats["frequency"])
+            abs_freq = self.filtered_appearance_freqs.get(node, 0)
+            self.graph.add_event(str(node), spm=stats["spm"], normalized_frequency=stats["frequency"],
+                                 absolute_frequency=abs_freq)
 
         connected_sources = set()
         connected_targets = set()
@@ -315,9 +319,7 @@ class AlphaMining(BaseMining):
 
     def create_safe_outgoing_edge(self, from_connector, to_node, real_source):
         if not self.graph.contains_edge(from_connector, to_node):
-            edge_dict = {(e["source"], e["target"]): e["frequency"] for e in self.get_edge_statistics()}
-            frequency = edge_dict.get((real_source, to_node), 0.0)
-            self.graph.create_edge(from_connector, to_node, frequency)
+            self.graph.create_edge(from_connector, to_node)
 
     def create_safe_node(self, node_id):
         if not self.graph.contains_node(node_id):

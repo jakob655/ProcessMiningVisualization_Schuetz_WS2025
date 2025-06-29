@@ -1,7 +1,9 @@
-from streamlit.runtime.uploaded_file_manager import UploadedFile
-import pandas as pd
-import pickle
 import base64
+import pickle
+from typing import Union
+
+import pandas as pd
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 
 class ImportOperations:
@@ -67,7 +69,7 @@ class ImportOperations:
                 model = pickle.load(file)
         return model
 
-    def read_file(self, file_path: str | UploadedFile) -> str:
+    def read_file(self, file_path: Union[str, UploadedFile]) -> str:
         """Reads a file and returns the content as a string. This is used to display the content of the file in the UI
 
         Parameters
@@ -83,7 +85,7 @@ class ImportOperations:
         if isinstance(file_path, UploadedFile):
             return file_path.read().decode("utf-8")
 
-        with open(file_path, "r") as file:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as file:
             return file.read()
 
     def read_file_binary(self, file_path: str) -> bytes:

@@ -42,7 +42,7 @@ class BaseAlgorithmView(BaseView):
             A dictionary containing the values for the sidebar elements. The keys of the dictionary
             are equal to the keys of the sliders and define the slider bounds.
         """
-        st.write("Node Filtering")
+        st.write("Log Filtering")
 
         if "spm_threshold" in sidebar_values:
             number_input_slider(
@@ -63,31 +63,11 @@ class BaseAlgorithmView(BaseView):
             )
 
         # Hook for additional node filters
-        self.render_node_filter_extensions(sidebar_values)
+        self.render_log_filter_extensions(sidebar_values)
 
-        st.write("Edge Filtering")
-
-        if "edge_frequency_threshold" in sidebar_values:
-            number_input_slider(
-                label="Edge Frequency",
-                min_value=sidebar_values["edge_frequency_threshold"][0],
-                max_value=sidebar_values["edge_frequency_threshold"][1],
-                key="edge_frequency_threshold",
-                help="Filter edges based on their frequency.",
-            )
-
-        # Hook for additional edge filters
-        self.render_edge_filter_extensions(sidebar_values)
-
-    def render_node_filter_extensions(self, sidebar_values: dict[str, any]) -> None:
+    def render_log_filter_extensions(self, sidebar_values: dict[str, any]) -> None:
         """Renders additional node filtering controls.
         Can be overridden by subclasses to add more node filters.
-        """
-        pass
-
-    def render_edge_filter_extensions(self, sidebar_values: dict[str, any]) -> None:
-        """Renders additional edge filtering controls.
-        Can be overridden by subclasses to add more edge filters.
         """
         pass
 
@@ -184,7 +164,7 @@ class BaseAlgorithmView(BaseView):
         """
         with self.node_data_container:
             with st.expander(f"Edge: {source} -> {target}"):
-                for line in description.split("\n"):
+                for line in description[-1].split("\n"):
                     st.write(line)
 
     def display_page_title(self, title: str) -> None:

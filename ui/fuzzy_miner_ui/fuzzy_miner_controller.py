@@ -26,6 +26,7 @@ class FuzzyMinerController(BaseAlgorithmController):
         self.correlation = None
         self.edge_cutoff = None
         self.utility_ratio = None
+        self.edge_frequency_threshold = None
 
         if views is None:
             views = [FuzzyMinerView()]
@@ -66,18 +67,22 @@ class FuzzyMinerController(BaseAlgorithmController):
         if "utility_ratio" not in st.session_state:
             st.session_state.utility_ratio = self.mining_model.get_utility_ratio()
 
+        if "edge_frequency_threshold" not in st.session_state:
+            st.session_state.edge_frequency_threshold = self.mining_model.get_edge_frequency_threshold()
+
         # set instance variables from session state
         self.unary_significance = st.session_state.unary_significance
         self.binary_significance = st.session_state.binary_significance
         self.correlation = st.session_state.correlation
         self.edge_cutoff = st.session_state.edge_cutoff
         self.utility_ratio = st.session_state.utility_ratio
+        self.edge_frequency_threshold = st.session_state.edge_frequency_threshold
 
     def perform_mining(self) -> None:
         """Performs the mining of the Fuzzy Miner algorithm."""
         super().perform_mining(unary_significance=self.unary_significance, binary_significance=self.binary_significance,
                                correlation=self.correlation, edge_cutoff=self.edge_cutoff,
-                               utility_ratio=self.utility_ratio)
+                               utility_ratio=self.utility_ratio, edge_freq_threshold=self.edge_frequency_threshold)
 
     def have_parameters_changed(self) -> bool:
         """Checks if the algorithm parameters have changed.
@@ -94,6 +99,7 @@ class FuzzyMinerController(BaseAlgorithmController):
                 or self.mining_model.get_correlation() != self.correlation
                 or self.mining_model.get_edge_cutoff() != self.edge_cutoff
                 or self.mining_model.get_utility_ratio() != self.utility_ratio
+                or self.mining_model.get_edge_frequency_threshold() != self.edge_frequency_threshold
         )
 
     def get_sidebar_values(self) -> dict[str, tuple[int | float, int | float]]:
@@ -112,5 +118,6 @@ class FuzzyMinerController(BaseAlgorithmController):
             "correlation": (0.0, 1.0),
             "edge_cutoff": (0.0, 1.0),
             "utility_ratio": (0.0, 1.0),
+            "edge_frequency_threshold": (0.0, 1.0),
         })
         return sidebar_values

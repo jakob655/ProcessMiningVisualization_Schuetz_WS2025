@@ -300,7 +300,7 @@ class BaseGraph:
             self,
             source_id: str | int,
             target_id: str | int,
-            weight: int = 1,
+            weight: float = 1.0,
             data: dict[str, str | int | float] | None = None,
             **edge_attributes,
     ) -> None:
@@ -312,8 +312,8 @@ class BaseGraph:
             soruce node id
         target_id : str | int
             target node id
-        weight : int, optional
-            weight of the edge, by default 1
+        weight : float, optional
+            weight of the edge, by default 1.0
         data : dict[str, str | int | float] | None, optional
             Additional data attached to the edge, by default None
 
@@ -336,7 +336,7 @@ class BaseGraph:
         edge = Edge(source_id, target_id, weight, data=data)
         self.edges[(edge.source, edge.destination)] = edge
 
-        if weight == None:
+        if weight is None:
             label = ""
         else:
             label = str(weight)
@@ -500,9 +500,11 @@ class BaseGraph:
             The id and description of the node.
         """
         node = self.get_node(id)
-        description = f"**Event:** {node.get_id()}"
+        description = ""
         if node.get_data():
             for key, value in node.get_data().items():
+                if isinstance(value, float):
+                    value = f"{float(value):.2f}"
                 description += f"\n**{key}:** {value}"
         return node.get_id(), description
 
@@ -524,9 +526,11 @@ class BaseGraph:
         """
         edge = self.get_edge(source, destination)
         name = f"{edge.source}->{edge.destination}"
-        description = f"**Edge:** {edge.source} -> {edge.destination}"
+        description = ""
         if edge.get_data():
             for key, value in edge.get_data().items():
+                if isinstance(value, float):
+                    value = f"{float(value):.2f}"
                 description += f"\n**{key}:** {value}"
         return name, description
 

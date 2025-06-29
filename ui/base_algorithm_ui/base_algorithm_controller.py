@@ -27,7 +27,6 @@ class BaseAlgorithmController(BaseController, ABC):
         """
         self.spm_threshold = None
         self.node_frequency_threshold = None
-        self.edge_frequency_threshold = None
         self.logger = get_logger("BaseAlgorithmController")
 
         self.mining_model = None
@@ -53,8 +52,7 @@ class BaseAlgorithmController(BaseController, ABC):
         """
         params = {
             "spm_threshold": self.spm_threshold,
-            "node_freq_threshold": self.node_frequency_threshold,
-            "edge_freq_threshold": self.edge_frequency_threshold
+            "node_freq_threshold": self.node_frequency_threshold
         }
         params.update(kwargs)
 
@@ -70,12 +68,9 @@ class BaseAlgorithmController(BaseController, ABC):
             st.session_state.spm_threshold = self.mining_model.get_spm_threshold()
         if "node_frequency_threshold" not in st.session_state:
             st.session_state.node_frequency_threshold = self.mining_model.get_node_frequency_threshold()
-        if "edge_frequency_threshold" not in st.session_state:
-            st.session_state.edge_frequency_threshold = self.mining_model.get_edge_frequency_threshold()
 
         self.spm_threshold = st.session_state.spm_threshold
         self.node_frequency_threshold = st.session_state.node_frequency_threshold
-        self.edge_frequency_threshold = st.session_state.edge_frequency_threshold
 
     def have_parameters_changed(self) -> bool:
         """Checks if the shared algorithm parameters (node and edge filtering sliders)
@@ -88,8 +83,7 @@ class BaseAlgorithmController(BaseController, ABC):
         """
         return (
                 self.mining_model.get_spm_threshold() != self.spm_threshold or
-                self.mining_model.get_node_frequency_threshold() != self.node_frequency_threshold or
-                self.mining_model.get_edge_frequency_threshold() != self.edge_frequency_threshold
+                self.mining_model.get_node_frequency_threshold() != self.node_frequency_threshold
         )
 
     def get_sidebar_values(self) -> dict[str, tuple[float, float]]:
@@ -107,7 +101,6 @@ class BaseAlgorithmController(BaseController, ABC):
         return {
             "spm_threshold": (0.0, 1.0),
             "node_frequency_threshold": (0.0, 1.0),
-            "edge_frequency_threshold": (0.0, 1.0),
         }
 
     def is_correct_model_type(self, model) -> bool:

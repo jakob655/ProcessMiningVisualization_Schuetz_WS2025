@@ -22,7 +22,7 @@ class HeuristicMinerController(BaseAlgorithmController):
             The class for the dataframe transformations. If None is passed, a new instance is created, by default None
         """
         self.threshold = None
-        self.frequency = None
+        self.edge_frequency_threshold = None
 
         if views is None:
             views = [HeuristicMinerView()]
@@ -51,16 +51,16 @@ class HeuristicMinerController(BaseAlgorithmController):
         if "threshold" not in st.session_state:
             st.session_state.threshold = self.mining_model.get_threshold()
 
-        if "frequency" not in st.session_state:
-            st.session_state.frequency = self.mining_model.get_min_frequency()
+        if "edge_frequency_threshold" not in st.session_state:
+            st.session_state.edge_frequency_threshold = self.mining_model.get_edge_frequency_threshold()
 
         # set instance variables from session state
         self.threshold = st.session_state.threshold
-        self.frequency = st.session_state.frequency
+        self.edge_frequency_threshold = st.session_state.edge_frequency_threshold
 
     def perform_mining(self) -> None:
         """Performs the mining of the Heuristic Miner algorithm."""
-        super().perform_mining(dependency_threshold=self.threshold, min_frequency=self.frequency)
+        super().perform_mining(dependency_threshold=self.threshold, edge_freq_threshold=self.edge_frequency_threshold)
 
     def have_parameters_changed(self) -> bool:
         """Checks if the algorithm parameters have changed.
@@ -73,7 +73,7 @@ class HeuristicMinerController(BaseAlgorithmController):
         return (
                 super().have_parameters_changed()
                 or self.mining_model.get_threshold() != self.threshold
-                or self.mining_model.get_min_frequency() != self.frequency
+                or self.mining_model.get_edge_frequency_threshold() != self.edge_frequency_threshold
         )
 
     def get_sidebar_values(self) -> dict[str, tuple[int | float, int | float]]:
@@ -87,7 +87,7 @@ class HeuristicMinerController(BaseAlgorithmController):
         """
         sidebar_values = super().get_sidebar_values()
         sidebar_values.update({
-            "frequency": (0, self.mining_model.get_max_frequency()),
             "threshold": (0.0, 1.0),
+            "edge_frequency_threshold": (0.0, 1.0),
         })
         return sidebar_values

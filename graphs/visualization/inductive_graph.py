@@ -12,7 +12,6 @@ class InductiveGraph(BaseGraph):
             frequency: dict[str, int] = None,
             node_sizes: dict[str, tuple[float, float]] = None,
             node_stats_map: dict[str, dict] = None,
-            edge_stats_map: dict[tuple[str, str], dict] = None,
     ) -> None:
         """Initialize the InductiveGraph object.
 
@@ -36,7 +35,6 @@ class InductiveGraph(BaseGraph):
         self.event_frequency = frequency
         self.node_sizes = node_sizes
         self.node_stats_map = node_stats_map or {}
-        self.edge_stats_map = edge_stats_map or {}
 
         self.build_graph(process_tree)
 
@@ -61,7 +59,7 @@ class InductiveGraph(BaseGraph):
             self,
             title: str,
             spm: float,
-            frequency: float,
+            normalized_frequency: float,
             **event_data,
     ) -> None:
         """Add an event to the graph.
@@ -72,22 +70,23 @@ class InductiveGraph(BaseGraph):
             name of the event
         spm : float
             spm value of the event
-        frequency : float
-            frequency of the event
+        normalized_frequency : float
+            normalized frequency of the event
         **event_data
             additional data for the event
         """
-        event_data["spm"] = spm
-        event_data["frequency"] = frequency
+        event_data["SPM value"] = spm
+        event_data["Frequency *(normalized)*"] = normalized_frequency
+
         rounded_freq = None
-        if frequency:
-            rounded_freq = math.ceil(frequency * 100) / 100
+        if normalized_frequency:
+            rounded_freq = math.ceil(normalized_frequency * 100) / 100
         label = f'<{title}<br/><font color="red">{rounded_freq:.2f}</font>>'
 
         width, height = self.node_sizes.get(title, (1.5, 0.5))
         absolute_frequency = self.event_frequency.get(title, 0)
         if absolute_frequency > 0:
-            event_data["absolute_frequency"] = absolute_frequency
+            event_data["Frequency *(absolute)*"] = absolute_frequency
         super().add_node(
             id=title,
             label=label,
@@ -98,35 +97,6 @@ class InductiveGraph(BaseGraph):
             style="rounded, filled",
             fillcolor="#FFFFFF",
         )
-
-    def create_edge(
-            self,
-            source: str,
-            destination: str,
-            frequency: float = None,
-            color: str = "black",
-            **edge_data
-    ) -> None:
-        """Create an edge between two nodes.
-
-        Parameters
-        ----------
-        source : str
-            soure node id
-        destination : str
-            destination node id
-        frequency : float
-            frequency of the edge
-        color : str, optional
-            color of the edge, by default "black"
-        **edge_data
-            additional data for the edge
-        """
-        rounded_freq = None
-        if frequency:
-            rounded_freq = math.ceil(frequency * 100) / 100
-        edge_data["frequency"] = frequency
-        super().add_edge(source, destination, rounded_freq, color=color, data=edge_data)
 
     def add_section(self, process_tree) -> tuple:
         """Adds a section from the process tree to the graph.
@@ -152,8 +122,6 @@ class InductiveGraph(BaseGraph):
                 start_node, end_node = silent_activity_id, silent_activity_id
             else:
                 title = str(process_tree)
-                width, height = self.node_sizes.get(title, (1.5, 0.5))
-                abs_freq = self.event_frequency.get(title, 0)
 
                 stat = self.node_stats_map.get(title, {})
                 spm = stat.get("spm", 0.0)
@@ -162,9 +130,7 @@ class InductiveGraph(BaseGraph):
                 self.add_event(
                     title=title,
                     spm=spm,
-                    frequency=freq,
-                    absolute_frequency=abs_freq,
-                    size=(width, height)
+                    normalized_frequency=freq,
                 )
                 start_node, end_node = title, title
 
@@ -204,14 +170,7 @@ class InductiveGraph(BaseGraph):
                 start_node = start
 
             if end_node is not None:
-                edge_stats = self.edge_stats_map.get((end_node, start), {})
-                freq = edge_stats.get("frequency", 0.0)
-
-                self.create_edge(
-                    source=end_node,
-                    destination=start,
-                    frequency=freq,
-                )
+                self.add_edge(end_node, start, weight=None)
 
             end_node = end
 
@@ -238,25 +197,8 @@ class InductiveGraph(BaseGraph):
         for section in process_tree:
             start, end = self.add_section(section)
 
-            if start in self.node_stats_map:
-                freq = 0.0
-                for (source, destination), stat in self.edge_stats_map.items():
-                    if destination == start:
-                        freq = stat.get("frequency", 0.0)
-                        break
-                self.create_edge(source=start_node, destination=start, frequency=freq)
-            else:
-                self.add_edge(start_node, start, weight=None)
-
-            if end in self.node_stats_map:
-                freq = 0.0
-                for (source, destination), stat in self.edge_stats_map.items():
-                    if source == end:
-                        freq = stat.get("frequency", 0.0)
-                        break
-                self.create_edge(source=end, destination=end_node, frequency=freq)
-            else:
-                self.add_edge(end, end_node, weight=None)
+            self.add_edge(start_node, start, weight=None)
+            self.add_edge(end, end_node, weight=None)
 
         return start_node, end_node
 
@@ -283,11 +225,7 @@ class InductiveGraph(BaseGraph):
             # add edges to the loop section
             # the start of the redo section is the end of the loop section
             # the end of the redo section is the start of the loop section
-            if end_node in self.node_stats_map:
-                freq = self.edge_stats_map.get((end_node, end_node), {}).get("frequency", 0.0)
-                self.create_edge(end_node, start, freq)
-            else:
-                self.add_edge(end_node, start, weight=None)
+            self.add_edge(end_node, start, weight=None)
             self.add_edge(end, start_node, weight=None)
 
         return start_node, end_node
@@ -384,38 +322,6 @@ class InductiveGraph(BaseGraph):
         self.add_node(id=node_id, label=" ", shape="point", fillcolor="#FFFFFF")
         self.silent_activities_count += 1
         return node_id
-
-    def node_to_string(self, id: str) -> tuple[str, str]:
-        """Return the node name/id and description for the given node id.
-        For special nodes like gates and silent activities, the description contains additional information about the node.
-
-        Parameters
-        ----------
-        id : str
-            id of the node
-
-        Returns
-        -------
-        tuple[str, str]
-            node name/id and description. The description contains the node name and frequency.
-            If the node is a special node like a gate or a silent activity, it also contains additional information about the node.
-        """
-        if "gate" in id or "silent" in id:
-            return self.special_node_to_string(id)
-
-        node = self.get_node(id)
-        description = ""
-
-        if spm := node.get_data_from_key("spm"):
-            description = f"{description}\n**SPM value:** {spm}"
-
-        if frequency := node.get_data_from_key("frequency"):
-            description = f"{description}\n**Frequency:** {frequency}"
-
-        if absolute_frequency := node.get_data_from_key("absolute_frequency"):
-            description = f"""{description}\n**Absolute Frequency:** {absolute_frequency}"""
-
-        return node.get_id(), description
 
     def special_node_to_string(self, id: str) -> tuple[str, str]:
         """Return the node name/id and description for the given special node id.
