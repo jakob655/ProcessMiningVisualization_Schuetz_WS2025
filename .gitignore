@@ -14,7 +14,6 @@ __pycache__/
 .Python
 venv/
 venv_test/
-build/
 # Important to ignore build/ directory. The build custom components are stored in build/ directory.
 # build/
 develop-eggs/
