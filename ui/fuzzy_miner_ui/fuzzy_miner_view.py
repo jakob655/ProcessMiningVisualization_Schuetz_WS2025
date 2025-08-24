@@ -1,13 +1,14 @@
-from ui.base_algorithm_ui.base_algorithm_view import BaseAlgorithmView
 import streamlit as st
+
 from components.number_input_slider import number_input_slider
+from ui.base_algorithm_ui.base_algorithm_view import BaseAlgorithmView
 
 
 class FuzzyMinerView(BaseAlgorithmView):
-    """View for the Fuzzy Miner algorithm."""
+    """View for the Genetic Miner algorithm."""
 
     def render_log_filter_extensions(self, sidebar_values: dict[str, any]) -> None:
-        st.write("Node Filtering")
+        st.write("### **Node Filtering**")
 
         number_input_slider(
             label="Unary Significance",
@@ -25,7 +26,7 @@ class FuzzyMinerView(BaseAlgorithmView):
             help="Correlation measures how closely related two events following one another are.",
         )
 
-        st.write("Edge Filtering")
+        st.write("### **Edge Filtering**")
 
         number_input_slider(
             label="Edge Frequency",

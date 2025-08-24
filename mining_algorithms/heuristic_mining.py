@@ -132,7 +132,7 @@ class HeuristicMining(BaseMining):
         y = 0
         for row in self.filtered_succession_matrix:
             x = 0
-            for i in row:
+            for _ in row:
                 if x == y:
                     dependency_matrix[x][y] = self.filtered_succession_matrix[x][y] / (
                                 self.filtered_succession_matrix[x][y] + 1)

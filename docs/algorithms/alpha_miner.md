@@ -72,7 +72,8 @@ The Alpha Miner works by analyzing traces (sequences of events) in the event log
 ---
 
 ## Metrics/Filtering
-### SPM Filter (Search Process Model)
+**SPM Filter (Search Process Model)**
+
 The **SPM filter** simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the spm metric, which balances complexity and common behavior. This abstraction helps generate clearer, more interpretable models which is especially useful for user-driven processes like search behavior.
 
 The **SPM value** ranges from 0.0 to 1.0 and reflects the semantic quality of a node. It defines the threshold below which nodes are considered low-quality due to low frequency or high complexity, and may be removed for abstraction.
@@ -80,7 +81,9 @@ The **SPM value** ranges from 0.0 to 1.0 and reflects the semantic quality of a 
 *For more information on the SPM metric, see: Marian Lux, Stefanie Rinderle-Ma, Andrei Preda: “Assessing the Quality of Search Process Models.”  
 Available online: https://ucrisportal.univie.ac.at/en/publications/assessing-the-quality-of-search-process-models*
 
-**Node frequency** measures how often each event (node) appears relative the most frequent event in the SPM-filtered log. The result is a normalized value between 0.0 and 1.0. Nodes with a frequency below a defined threshold are removed after SPM filtering.
+**Node frequency**
+
+Measures how often each event (node) appears relative the most frequent event in the SPM-filtered log. The result is a normalized value between 0.0 and 1.0. Nodes with a frequency below a defined threshold are removed after SPM filtering.
 
 ---
 

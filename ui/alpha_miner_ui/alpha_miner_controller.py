@@ -1,7 +1,6 @@
-from ui.base_algorithm_ui.base_algorithm_controller import BaseAlgorithmController
-from ui.alpha_miner_ui.alpha_miner_view import AlphaMinerView
-import streamlit as st
 from mining_algorithms.alpha_mining import AlphaMining
+from ui.alpha_miner_ui.alpha_miner_view import AlphaMinerView
+from ui.base_algorithm_ui.base_algorithm_controller import BaseAlgorithmController
 
 
 class AlphaMinerController(BaseAlgorithmController):
@@ -13,9 +12,9 @@ class AlphaMinerController(BaseAlgorithmController):
         Parameters
         ----------
         views : List[BaseAlgorithmView] | BaseAlgorithmView, optional
-            The views for the Heuristic Miner algorithm. If None is passed, the default view is used, by default None
+            The views for the Alpha Miner algorithm. If None is passed, the default view is used, by default None
         mining_model_class : MiningInterface Class, optional
-            The mining model class for the Heuristic Miner algorithm. If None is passed, the default model class is used, by default None
+            The mining model class for the Alpha Miner algorithm. If None is passed, the default model class is used, by default None
         dataframe_transformations : DataframeTransformations, optional
             The class for the dataframe transformations. If None is passed, a new instance is created, by default None
         """

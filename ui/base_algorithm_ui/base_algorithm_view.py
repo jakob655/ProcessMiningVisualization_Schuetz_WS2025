@@ -1,10 +1,9 @@
 import streamlit as st
 
-from components.number_input_slider import number_input_slider
-from ui.base_ui.base_view import BaseView
 from components.buttons import home_button, navigation_button
 from components.interactiveGraph import interactiveGraph
-from abc import abstractmethod
+from components.number_input_slider import number_input_slider
+from ui.base_ui.base_view import BaseView
 
 
 class BaseAlgorithmView(BaseView):
@@ -42,7 +41,7 @@ class BaseAlgorithmView(BaseView):
             A dictionary containing the values for the sidebar elements. The keys of the dictionary
             are equal to the keys of the sliders and define the slider bounds.
         """
-        st.write("Log Filtering")
+        st.write("### **Log Filtering**")
 
         if "spm_threshold" in sidebar_values:
             number_input_slider(

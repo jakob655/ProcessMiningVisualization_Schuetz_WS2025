@@ -1,8 +1,8 @@
 from ui.alpha_miner_ui.alpha_miner_controller import AlphaMinerController
-from ui.heuristic_miner_ui.heuristic_miner_controller import HeuristicMinerController
 from ui.fuzzy_miner_ui.fuzzy_miner_controller import FuzzyMinerController
+from ui.genetic_miner_ui.genetic_miner_controller import GeneticMinerController
+from ui.heuristic_miner_ui.heuristic_miner_controller import HeuristicMinerController
 from ui.inductive_miner_ui.inductive_miner_controller import InductiveMinerController
-
 
 # colon_substitute is used to replace the colon in event names to make them compatible with graphviz.
 colon_substitute = "___"
@@ -50,6 +50,7 @@ algorithm_mappings = {
     "Fuzzy Mining": "fuzzy",
     "Inductive Mining": "inductive",
     "Alpha Mining": "alpha",
+    "Genetic Mining": "genetic",
 }
 # Maps the algorithm routes to the paths of the documentation files.
 docs_path_mappings = {
@@ -57,6 +58,7 @@ docs_path_mappings = {
     "fuzzy": "docs/algorithms/fuzzy_miner.md",
     "inductive": "docs/algorithms/inductive_miner.md",
     "alpha": "docs/algorithms/alpha_miner.md",
+    "genetic": "docs/algorithms/genetic_miner.md"
 }
 
 # Maps the algorithm routes to the controllers.
@@ -65,4 +67,5 @@ algorithm_routes = {
     "fuzzy": FuzzyMinerController,
     "inductive": InductiveMinerController,
     "alpha": AlphaMinerController,
+    "genetic": GeneticMinerController,
 }

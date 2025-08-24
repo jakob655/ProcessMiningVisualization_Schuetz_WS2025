@@ -1,14 +1,14 @@
-from ui.base_algorithm_ui.base_algorithm_view import BaseAlgorithmView
 import streamlit as st
+
 from components.number_input_slider import number_input_slider
+from ui.base_algorithm_ui.base_algorithm_view import BaseAlgorithmView
 
 
 class HeuristicMinerView(BaseAlgorithmView):
     """View for the Heuristic Miner algorithm."""
 
     def render_log_filter_extensions(self, sidebar_values: dict[str, any]) -> None:
-
-        st.write("Edge Filtering")
+        st.write("### **Edge Filtering**")
 
         number_input_slider(
             label="Edge Frequency",

@@ -1,6 +1,7 @@
-from ui.base_algorithm_ui.base_algorithm_view import BaseAlgorithmView
 import streamlit as st
+
 from components.number_input_slider import number_input_slider
+from ui.base_algorithm_ui.base_algorithm_view import BaseAlgorithmView
 
 
 class InductiveMinerView(BaseAlgorithmView):
@@ -17,7 +18,7 @@ class InductiveMinerView(BaseAlgorithmView):
                     All traces with a frequency that is lower than treshold * max_trace_frequency will be removed. The higher the value, the less traces will be included in the graph.""",
         )
 
-        st.write("Node Filtering")
+        st.write("### **Node Filtering**")
 
         number_input_slider(
             label="Activity Threshold",

@@ -31,12 +31,9 @@ class BaseMining(MiningInterface):
         self.logger.debug(f"Appearance Frequency: {self.appearance_frequency}")
         self.event_positions = self.get_event_positions(self.events)
         self.succession_matrix = self.__create_succession_matrix(self.log, self.events, self.event_positions)
-        self.logger.debug(f"Succession Matrix: {self.succession_matrix}")
+        self.logger.debug(f"Succession Matrix: \n {self.succession_matrix}")
 
-        # default filter setup
-        self.spm_threshold = 0.15
-        self.node_freq_threshold = 0.30
-        self.edge_freq_threshold = 0.30
+        self._init_filter_thresholds()
 
         self._filter_state = {
             "spm_threshold": self.spm_threshold,
@@ -73,7 +70,7 @@ class BaseMining(MiningInterface):
         self.filtered_succession_matrix = self.__create_succession_matrix(self.node_frequency_filtered_log,
                                                                           self.node_frequency_filtered_events,
                                                                           self.filtered_event_positions)
-        self.logger.debug(f"Filtered succession Matrix: {self.filtered_succession_matrix}")
+        self.logger.debug(f"Filtered succession Matrix: \n {self.filtered_succession_matrix}")
 
         self.filtered_events, self.filtered_appearance_freqs = self.__filter_out_all_events(
             self.node_frequency_filtered_log)
@@ -490,6 +487,28 @@ class BaseMining(MiningInterface):
         """Return True if edge (a -> b) passes frequency threshold"""
         return self.edge_frequencies.get((a, b), 0) >= self.edge_freq_threshold
 
+    def _init_filter_thresholds(
+            self,
+            spm_threshold: float = 0.00,
+            node_freq_threshold: float = 0.00,
+            edge_freq_threshold: float = 0.30,
+    ):
+        """Initialize default thresholds for all filtering steps.
+
+        Parameters
+        ----------
+        spm_threshold : float, optional
+            Minimum SPM value required to keep an event (default: 0.15).
+        node_freq_threshold : float, optional
+            Minimum normalized node frequency to keep an event (default: 0.30).
+        edge_freq_threshold : float, optional
+            Minimum normalized edge frequency to keep a directly-follows edge (default: 0.30).
+
+        """
+        self.spm_threshold = spm_threshold
+        self.node_freq_threshold = node_freq_threshold
+        self.edge_freq_threshold = edge_freq_threshold
+
     def recalculate_model_filters(self):
         """Recalculate all filtered events, logs, and frequencies based on current thresholds, if they have changed."""
 
@@ -500,10 +519,8 @@ class BaseMining(MiningInterface):
         }
 
         if current_state == self._filter_state:
-            self.logger.debug("No filter changes detected - skipping recalculation.")
             return
 
-        self.logger.debug("Filter state changed - recalculating all filters.")
         self._filter_state = current_state
 
         self.spm_filtered_events = self.get_spm_filtered_events()

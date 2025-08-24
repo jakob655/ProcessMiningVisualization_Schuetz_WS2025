@@ -2,16 +2,16 @@
 
 # Process-Mining-Visualization
 
-Implementation of a desktop app for importing event logs, mining and visualizing process models by using different algorithms (like alpha miner, heuristic miner, inductive miner, fuzzy miner) and metrics for filtering nodes and edges on mined process models. Mined process models can be exported as images.
+Implementation of a desktop app for importing event logs, mining and visualizing process models by using different algorithms (like alpha miner, heuristic miner, inductive miner, fuzzy miner, genetic miner) and metrics for filtering nodes and edges on mined process models. Mined process models can be exported as images.
 
 # Status
 
-This project is at version 0.2.0
+This project is at version 0.3.0
 Ready for use. Hopefully no severe bugs.
 
-The Heuristic Miner, Fuzzy Miner and Inductive Miner algorithms have been implemented.
+The *Alpha Miner*, *Heuristic Miner*, *Inductive Miner*, *Fuzzy Miner* and *Genetic Miner* algorithms have been implemented.
 
-# Ensure the virtual environment is installed. If it hasn't been already then
+# Ensure the virtual environment is installed.
 
 Create a new directory, e.g venv and install the virtual environment using command:
 
@@ -35,7 +35,7 @@ source activate
 
 # Requirements
 
-Python version 3.10.7, 3.11.6, 3.12.2 ----- Older versions likely to work as well, but not tested.
+Python version 3.10.7, 3.11.6, 3.12.5 --- Older versions likely to work as well, but not tested.
 Download Python from <www.python.org>
 
 Graphviz
@@ -84,14 +84,14 @@ python -m unittest <Path To Tests>
 
 in the root folder.
 
-The testing requirements need to be installed. This are written in the `tests/test_requirements.txt` file.
-These can be installed using the following command:
+The test dependencies are listed in `tests/test_requirements.txt`.
+These can be installed with the following command:
 
 ```bash
 pip install -r tests/test_requirements.txt
 ```
 
-If you want to run unit tests of `heuristic_mining_test.py` in the directory `tests/mining_algorithms`, just type the command below:
+To run a specific unit test, for example `heuristic_mining_test.py` located in `tests/mining_algorithms`, just type the command below:
 
 ```bash
 python -m unittest tests.mining_algorithms.heuristic_mining_test
