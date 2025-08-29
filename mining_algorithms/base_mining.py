@@ -489,9 +489,9 @@ class BaseMining(MiningInterface):
 
     def _init_filter_thresholds(
             self,
-            spm_threshold: float = 0.00,
-            node_freq_threshold: float = 0.00,
-            edge_freq_threshold: float = 0.30,
+            spm_threshold: float = 0.10,
+            node_freq_threshold: float = 0.25,
+            edge_freq_threshold: float = 0.25,
     ):
         """Initialize default thresholds for all filtering steps.
 

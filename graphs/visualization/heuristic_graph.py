@@ -1,5 +1,3 @@
-import math
-
 from graphs.visualization.base_graph import BaseGraph
 
 
@@ -43,7 +41,7 @@ class HeuristicGraph(BaseGraph):
         event_data["Frequency *(absolute)*"] = absolute_frequency
         rounded_freq = None
         if normalized_frequency:
-            rounded_freq = math.floor(normalized_frequency * 100) / 100
+            rounded_freq = round(normalized_frequency, 2)
         label = f'<{title}<br/><font color="red">{rounded_freq:.2f}</font>>'
         width, height = size
         super().add_node(
@@ -64,6 +62,7 @@ class HeuristicGraph(BaseGraph):
             size: float,
             normalized_frequency: float = None,
             absolute_frequency: int = None,
+            dependency_score: float = None,
             color: str = "black",
             **edge_data
     ) -> None:
@@ -81,6 +80,8 @@ class HeuristicGraph(BaseGraph):
             normalized frequency of the edge, by default None
         absolute_frequency : int, optional
             absolute frequency of the edge, by default None
+        dependency_score : float, optional
+            dependency score of the edge
         color : str, optional
             color of the edge, by default "black"
         **edge_data
@@ -89,7 +90,9 @@ class HeuristicGraph(BaseGraph):
         # add dependency threshold for expander on-click
         rounded_freq = None
         if normalized_frequency:
-            rounded_freq = math.floor(normalized_frequency * 100) / 100
+            rounded_freq = round(normalized_frequency, 2)
         edge_data["Frequency *(normalized)*"] = normalized_frequency
         edge_data["Frequency *(absolute)*"] = absolute_frequency
+        if dependency_score is not None:
+            edge_data["Dependency score"] = round(dependency_score, 3)
         super().add_edge(source, destination, rounded_freq, penwidth=str(size), color=color, data=edge_data)

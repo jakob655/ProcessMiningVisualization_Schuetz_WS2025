@@ -1,5 +1,3 @@
-import math
-
 from graphs.visualization.base_graph import BaseGraph
 
 
@@ -39,7 +37,7 @@ class AlphaGraph(BaseGraph):
         event_data["Frequency *(absolute)*"] = absolute_frequency
         rounded_freq = None
         if normalized_frequency:
-            rounded_freq = math.ceil(normalized_frequency * 100) / 100
+            rounded_freq = round(normalized_frequency, 2)
         label = f'<{title}<br/><font color="red">{rounded_freq:.2f}</font>>'
         super().add_node(
             id=title,
@@ -82,5 +80,5 @@ class AlphaGraph(BaseGraph):
             label=" ",
             shape="circle",
             style="filled",
-            fillcolor="#FDFFF5",
+            fillcolor="#E1E1E1",
         )

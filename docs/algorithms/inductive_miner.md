@@ -62,7 +62,7 @@ The last fall through is the flower model. This is a process tree, with the loop
 
 ## Metrics
 
-The algorithm uses four metrics: the **SPM metric**, the **Node frequency**, the **activity threshold** and the **traces threshold**.
+The algorithm uses three metrics: the **SPM metric**, the **Node frequency** and the **traces threshold**.
 
 The **SPM filter** simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the **spm metric**, which balances structural complexity (node degree) and behavioral relevance (frequency). This helps generate clearer, more interpretable models. Especially useful for user-driven or search-oriented event logs.
 
@@ -71,19 +71,17 @@ Available online: https://ucrisportal.univie.ac.at/en/publications/assessing-the
 
 **Node frequency** measures how often each event (node) appears relative to the most frequent event in the log. It is calculated after the SPM filtering step. The value lies between 0.0 and 1.0 and helps assess how central a node is in terms of frequency.
 
-The **activity threshold** describes the frequency of an event in relation to the most frequent event. It is calculated by dividing the frequency of the event by the maximum frequency across all events.
-
 The **traces threshold** describes the frequency of a trace in relation to the most frequent trace. It is calculated by dividing the frequency of a trace by the maximum frequency across all traces.
 
 ## Filtering
 
-Five metrics are used for filtering: the **SPM metric**, the **Node frequency**, the **Edge frequency**, the **activity threshold** and the **traces threshold**.
+Four metrics are used for filtering: the **SPM metric**, the **Node frequency**, the **Edge frequency** and the **traces threshold**.
 
 The **SPM value** ranges from 0.0 to 1.0 and reflects the semantic quality of a node. It defines the threshold below which nodes are considered low-quality due to low frequency or high connectivity, and may be removed for abstraction before discovering cuts in the log.
 
 The **node frequency** value is in the range of 0.0 to 1.0. It filters out nodes that appear too rarely in the log. Nodes below this threshold are removed after the SPM filtering step.
 
-The **activity threshold** is in the range of 0.0 to 1.0. It removes events from the log that occur less frequently than the defined threshold.
+The **edge frequency** value is in the range of 0.0 to 1.0. It filters out edges that occur too rarely in the log. Edges below this threshold are removed after node filtering step.
 
 The **traces threshold** is also in the range of 0.0 to 1.0. It removes traces that are less frequent than the selected threshold.
 

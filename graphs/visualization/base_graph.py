@@ -1,4 +1,5 @@
 import graphviz
+
 from exceptions.graph_exceptions import (
     DuplicateNodeException,
     DuplicateEdgeException,
@@ -340,6 +341,17 @@ class BaseGraph:
             label = ""
         else:
             label = str(weight)
+
+        # Enforce min penwidth and add custom value on top
+        base_penwidth = 3.0
+        raw_penwidth = edge_attributes.get("penwidth", 0)
+
+        if raw_penwidth in (None, "", "None"):
+            custom_penwidth = 0.0
+        else:
+            custom_penwidth = float(raw_penwidth)
+
+        edge_attributes["penwidth"] = str(base_penwidth + custom_penwidth)
 
         graphviz_source_id = self.substitiute_colons(edge.source)
         graphviz_target_id = self.substitiute_colons(edge.destination)

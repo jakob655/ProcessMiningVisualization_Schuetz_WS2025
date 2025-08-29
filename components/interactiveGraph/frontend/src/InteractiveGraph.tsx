@@ -8,31 +8,26 @@ import { graphviz } from "d3-graphviz"
 import { selectAll, select } from "d3"
 import { v4 as uuidv4 } from "uuid"
 
-type nodeClickData = {
-  clickId: string
-  nodeId: string
-}
-
-type edgeClickData = {
-  edgeClickId: string
-  source: string
-  target: string
-}
+type ClickData =
+  | {
+      type: "node"
+      clickId: string
+      nodeId: string
+    }
+  | {
+      type: "edge"
+      clickId: string
+      source: string
+      target: string
+    }
+  | null
 
 const InteractiveGraph: React.FC<ComponentProps> = ({ args }) => {
   const dot_source = args["graphviz_string"]
   const key = args["key"]
   const height: number = args["height"]
   const div_ref: React.Ref<HTMLDivElement> = useRef<HTMLDivElement>(null)
-  const [nodeClickData, setNodeClickData] = useState<nodeClickData>({
-    clickId: "",
-    nodeId: "",
-  })
-  const [edgeClickData, setEdgeClickData] = useState<edgeClickData>({
-    edgeClickId: "",
-    source: "",
-    target: "",
-  })
+  const [clickData, setClickData] = useState<ClickData>(null)
   const [width, setWidth] = useState(0)
 
   const [isRendering, setIsRendering] = useState(true)
@@ -47,7 +42,8 @@ const InteractiveGraph: React.FC<ComponentProps> = ({ args }) => {
       event.preventDefault()
       const node_id = event.target.__data__.parent.key
       console.log(node_id)
-      setNodeClickData({
+      setClickData({
+        type: "node",
         clickId: uuidv4(),
         nodeId: node_id,
       })
@@ -56,8 +52,9 @@ const InteractiveGraph: React.FC<ComponentProps> = ({ args }) => {
       event.preventDefault()
       const titleText = select(event.currentTarget).select("title").text()
       const [src, tgt] = titleText.split("->")
-      setEdgeClickData({
-        edgeClickId: uuidv4(),
+      setClickData({
+        type: "edge",
+        clickId: uuidv4(),
         source: src,
         target: tgt,
       })
@@ -116,12 +113,10 @@ const InteractiveGraph: React.FC<ComponentProps> = ({ args }) => {
   }, [dot_source, width, height])
 
   useEffect(() => {
-    Streamlit.setComponentValue(nodeClickData)
-  }, [nodeClickData])
-
-  useEffect(() => {
-    Streamlit.setComponentValue(edgeClickData)
-  }, [edgeClickData])
+    if (clickData !== null)  {
+      Streamlit.setComponentValue(clickData)
+    }
+  }, [clickData])
 
   return (
     <div

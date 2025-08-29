@@ -13,7 +13,6 @@ class HeuristicMining(BaseMining):
         self.dependency_matrix = {}
 
         # Graph modifiers
-        self.min_edge_thickness = 1
         self.dependency_threshold = 0.5
 
     def generate_graph(
@@ -86,19 +85,18 @@ class HeuristicMining(BaseMining):
                 if dependency_graph[i][j] == 1.:
                     norm_frequency = edge_stats_map.get((source, target), {}).get("normalized_frequency", 0.0)
                     abs_frequency = edge_stats_map.get((source, target), {}).get("absolute_frequency", 0)
-                    if dependency_threshold == 0:
-                        edge_thickness = 0.1
-                    else:
-                        edge_thickness = edge_freq_labels_sorted[
-                                             edge_freq_sorted.index(
-                                                 self.dependency_matrix[i][j])] + self.min_edge_thickness
+                    edge_thickness = edge_freq_labels_sorted[
+                                         edge_freq_sorted.index(
+                                             self.dependency_matrix[i][j])] / 1.3
+                    dependency_score = float(self.dependency_matrix[i][j])
 
                     self.graph.create_edge(
                         source=source,
                         destination=target,
                         size=edge_thickness,
                         normalized_frequency=norm_frequency,
-                        absolute_frequency=abs_frequency
+                        absolute_frequency=abs_frequency,
+                        dependency_score=dependency_score
                     )
 
                 if j == len(self.filtered_events) - 1 and column_total == 0 and \
@@ -157,6 +155,8 @@ class HeuristicMining(BaseMining):
                         self.dependency_matrix[y][x] >= dependency_threshold and
                         self.filter_edge(a, b)
                 ):
+                    if self.filtered_succession_matrix[y][x] == 0:
+                        continue
                     dependency_graph[y][x] += 1
             y += 1
 

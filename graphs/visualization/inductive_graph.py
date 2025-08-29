@@ -1,5 +1,3 @@
-import math
-
 from graphs.visualization.base_graph import BaseGraph
 
 
@@ -80,13 +78,11 @@ class InductiveGraph(BaseGraph):
 
         rounded_freq = None
         if normalized_frequency:
-            rounded_freq = math.ceil(normalized_frequency * 100) / 100
+            rounded_freq = round(normalized_frequency, 2)
         label = f'<{title}<br/><font color="red">{rounded_freq:.2f}</font>>'
 
         width, height = self.node_sizes.get(title, (1.5, 0.5))
-        absolute_frequency = self.event_frequency.get(title, 0)
-        if absolute_frequency > 0:
-            event_data["Frequency *(absolute)*"] = absolute_frequency
+        event_data["Frequency *(absolute)*"] = self.event_frequency.get(title, 0)
         super().add_node(
             id=title,
             label=label,
@@ -323,7 +319,28 @@ class InductiveGraph(BaseGraph):
         self.silent_activities_count += 1
         return node_id
 
-    def special_node_to_string(self, id: str) -> tuple[str, str]:
+    def node_to_string(self, id: str) -> tuple[str, str]:
+        """Return the node id and description.
+
+        For gates and silent activities, return predefined descriptions.
+        For events, use the BaseGraph default (list data fields).
+
+        Parameters
+        ----------
+        id : str
+            The id of the node.
+
+        Returns
+        -------
+        tuple[str, str]
+            Node id and description.
+        """
+        if "gate" in id or "silent" in id:
+            return self.special_node_to_string(id)
+        return super().node_to_string(id)
+
+    @staticmethod
+    def special_node_to_string(id: str) -> tuple[str, str]:
         """Return the node name/id and description for the given special node id.
 
         Parameters
@@ -344,21 +361,15 @@ class InductiveGraph(BaseGraph):
             elif "end" in id:
                 title = "Exclusive End Gate"
 
-            description = f"""**Exclusive Gateway**
-            
-            The Exclusive Gateway is used to represent a decision point in the process flow."""
+            description = f"""**Exclusive Gateway**\nThe Exclusive Gateway is used to represent a decision point in the process flow."""
         elif "parallel" in id:
             if "start" in id:
                 title = "Parallel Start Gate"
             elif "end" in id:
                 title = "Parallel End Gate"
-            description = f"""**Parallel Gateway**
-            
-            The Parallel Gateway is used to represent a synchronization point in the process flow."""
+            description = f"""**Parallel Gateway**\nThe Parallel Gateway is used to represent a synchronization point in the process flow."""
         elif "silent" in id:
             title = "Silent Activity"
-            description = f"""**Silent Activity**
-            
-            A silent activity is an activity that does not have any effect on the process flow. It is used to represent a transition in the process flow without any actual work being done."""
+            description = f"""**Silent Activity**\nA silent activity is an activity that does not have any effect on the process flow. It is used to represent a transition in the process flow without any actual work being done."""
 
         return title, description

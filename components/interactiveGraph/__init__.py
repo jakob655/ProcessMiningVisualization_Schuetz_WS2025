@@ -25,12 +25,9 @@ def interactiveGraph(
         graph: BaseGraph, onNodeClick, onEdgeClick, key="interactiveGraph", height=600
 ) -> None:
     state_name = f"previous_clickId-{key}"
-    edge_state_name = f"previous_edgeClickId-{key}"
 
     if state_name not in st.session_state:
         st.session_state[state_name] = ""
-    if edge_state_name not in st.session_state:
-        st.session_state[edge_state_name] = ""
 
     component_value = _component_func(
         graphviz_string=graph.get_graphviz_string(), key=key, height=height
@@ -44,17 +41,13 @@ def interactiveGraph(
         and component_value["clickId"] != st.session_state[state_name]
     ):
         st.session_state[state_name] = component_value["clickId"]
-        node_name, description = graph.node_to_string(component_value["nodeId"])
-        onNodeClick(node_name, description)
 
-    if (
-        component_value is not None
-        and component_value.get("edgeClickId", "") != ""
-        and component_value["edgeClickId"] != st.session_state[edge_state_name]
-    ):
-        st.session_state[edge_state_name] = component_value["edgeClickId"]
-        source = component_value.get("source", "")
-        target = component_value.get("target", "")
+        if component_value["type"] == "node":
+            node_name, description = graph.node_to_string(component_value["nodeId"])
+            onNodeClick(node_name, description)
 
-        edge_description = graph.edge_to_string(source, target)
-        onEdgeClick(source, target, edge_description)
+        elif component_value["type"] == "edge":
+            source = component_value.get("source", "")
+            target = component_value.get("target", "")
+            edge_description = graph.edge_to_string(source, target)
+            onEdgeClick(source, target, edge_description)

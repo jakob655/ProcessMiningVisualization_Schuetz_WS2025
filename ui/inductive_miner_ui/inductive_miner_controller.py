@@ -1,7 +1,8 @@
+import streamlit as st
+
+from mining_algorithms.inductive_mining import InductiveMining
 from ui.base_algorithm_ui.base_algorithm_controller import BaseAlgorithmController
 from ui.inductive_miner_ui.inductive_miner_view import InductiveMinerView
-from mining_algorithms.inductive_mining import InductiveMining
-import streamlit as st
 
 
 class InductiveMinerController(BaseAlgorithmController):
@@ -22,7 +23,6 @@ class InductiveMinerController(BaseAlgorithmController):
             The class for the dataframe transformations. If None is passed, a new instance is created, by default None
         """
         self.traces_threshold = None
-        self.activity_threshold = None
 
         if views is None:
             views = [InductiveMinerView()]
@@ -50,18 +50,12 @@ class InductiveMinerController(BaseAlgorithmController):
         if "traces_threshold" not in st.session_state:
             st.session_state.traces_threshold = self.mining_model.get_traces_threshold()
 
-        if "activity_threshold" not in st.session_state:
-            st.session_state.activity_threshold = (
-                self.mining_model.get_activity_threshold()
-            )
-
         # set instance variables from session state
         self.traces_threshold = st.session_state.traces_threshold
-        self.activity_threshold = st.session_state.activity_threshold
 
     def perform_mining(self) -> None:
         """Performs the mining of the Inductive Miner algorithm."""
-        super().perform_mining(activity_threshold=self.activity_threshold, traces_threshold=self.traces_threshold)
+        super().perform_mining(traces_threshold=self.traces_threshold)
 
     def have_parameters_changed(self) -> bool:
         """Checks if the algorithm parameters have changed.
@@ -73,7 +67,6 @@ class InductiveMinerController(BaseAlgorithmController):
         """
         return (
                 super().have_parameters_changed()
-                or self.mining_model.get_activity_threshold() != self.activity_threshold
                 or self.mining_model.get_traces_threshold() != self.traces_threshold
         )
 
@@ -89,7 +82,6 @@ class InductiveMinerController(BaseAlgorithmController):
         sidebar_values = super().get_sidebar_values()
         sidebar_values.update({
             "traces_threshold": (0.0, 1.0),
-            "activity_threshold": (0.0, 1.0),
         })
 
         return sidebar_values

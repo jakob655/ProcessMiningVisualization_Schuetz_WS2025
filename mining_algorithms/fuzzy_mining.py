@@ -136,13 +136,13 @@ class FuzzyMining(BaseMining):
 
         # print clustered nodes
         self.__add_clustered_nodes_to_graph(
-            self.graph, clustered_nodes_after_sec_rule, self.sign_dict
+            clustered_nodes_after_sec_rule, self.sign_dict
         )
         # normal nodes
         # normal_nodes_after_sec_rule = self.__calculate_normal_nodes()
         # what is already clustered is not a normal node
         self.__add_normal_nodes_to_graph(
-            self.graph, nodes_after_first_rule, self.list_of_clustered_nodes
+            nodes_after_first_rule, self.list_of_clustered_nodes
         )
 
         list_of_filtered_edges_as_node = self.__get_as_node_removed_indices(
@@ -150,7 +150,7 @@ class FuzzyMining(BaseMining):
         )
 
         self.__add_edges_to_graph(
-            self.graph, clustered_nodes_after_sec_rule, list_of_filtered_edges_as_node
+            clustered_nodes_after_sec_rule, list_of_filtered_edges_as_node
         )
 
         # add start and end nodes
@@ -376,7 +376,7 @@ class FuzzyMining(BaseMining):
         return normalised_matrix
 
     def __add_edges_to_graph_for_each_method(
-            self, edges, graph, node_to_node_case, list_of_filtered_edges
+            self, edges, node_to_node_case, list_of_filtered_edges
     ):
         edge_stats = self.get_edge_statistics()
         edge_stats_map = {(e["source"], e["target"]): e for e in edge_stats}
@@ -385,11 +385,6 @@ class FuzzyMining(BaseMining):
             current_cluster = pair[0]
             next_cluster = pair[1]
 
-            stats = edge_stats_map.get((current_cluster, next_cluster), {})
-            norm_freq = stats.get("normalized_frequency", 0.0)
-            abs_freq = stats.get("absolute_frequency", 0)
-            significance = value
-
             if node_to_node_case:
                 if not self.filter_edge(current_cluster, next_cluster):
                     continue
@@ -397,22 +392,73 @@ class FuzzyMining(BaseMining):
                 if [current_cluster, next_cluster] in list_of_filtered_edges:
                     continue
 
+                current_cluster_id, next_cluster_id, norm_freq, abs_freq, significance_val = self.__aggregate_edge_values(
+                    current_cluster, next_cluster, edge_stats_map)
+
                 self.graph.create_edge(
-                    current_cluster, next_cluster, norm_freq, abs_freq, significance
+                    current_cluster, next_cluster, norm_freq, abs_freq, correlation=value,
+                    significance=significance_val
                 )
             else:
-                if current_cluster in self.cluster_id_mapping:
-                    current_cluster = self.cluster_id_mapping.get(current_cluster)
-
-                if next_cluster in self.cluster_id_mapping:
-                    next_cluster = self.cluster_id_mapping.get(next_cluster)
+                current_cluster_id, next_cluster_id, norm_freq, abs_freq, significance_val = self.__aggregate_edge_values(
+                    current_cluster, next_cluster, edge_stats_map)
 
                 self.graph.create_edge(
-                    current_cluster, next_cluster, norm_freq, abs_freq, significance, "red"
+                    current_cluster_id, next_cluster_id, norm_freq, abs_freq, "red", correlation=value,
+                    significance=significance_val
                 )
 
+    def __aggregate_edge_values(
+            self,
+            current_cluster: str,
+            next_cluster: str,
+            edge_stats_map: dict
+    ):
+        current_nodes, current_cluster_id = self.__expand_cluster(current_cluster)
+        next_nodes, next_cluster_id = self.__expand_cluster(next_cluster)
+
+        pairs = [(src, tgt) for src in current_nodes for tgt in next_nodes if src != tgt]
+
+        norm_vals = []
+        abs_vals = []
+        sig_vals = []
+        for src, tgt in pairs:
+            stats = edge_stats_map.get((src, tgt), {})
+            norm_vals.append(stats.get("normalized_frequency", 0.0))
+            abs_vals.append(stats.get("absolute_frequency", 0))
+            sig_vals.append(self.__get_binary_significance(src, tgt))
+
+        norm_vals = np.array(norm_vals, dtype=float)
+        abs_vals = np.array(abs_vals, dtype=float)
+        sig_vals = np.array(sig_vals, dtype=float)
+
+        if len(pairs) > 0:
+            norm_freq = round(norm_vals.mean(), 2)
+            abs_freq = int(abs_vals.mean())
+            significance_val = round(sig_vals.mean(), 2)
+        else:
+            norm_freq, abs_freq, significance_val = 0.0, 0, 0.0
+
+        return current_cluster_id, next_cluster_id, norm_freq, abs_freq, significance_val
+
+    def __expand_cluster(self, cluster: str) -> tuple[list[str], str]:
+        if cluster in self.cluster_id_mapping:
+            return cluster.split(self.cluster_seperator), self.cluster_id_mapping[cluster]
+        else:
+            return [cluster], cluster
+
+    def __get_binary_significance(self, src: str, tgt: str) -> float:
+        freq = self.edge_frequencies.get((src, tgt), 0.0)
+        if freq == 0.0:
+            return 0.0
+
+        if src in self.filtered_events and tgt in self.filtered_events:
+            sig_val = self.sign_after_first_rule[self.filtered_events.index(src)][self.filtered_events.index(tgt)]
+            return 0.0 if sig_val == -1 else sig_val
+        return 0.0
+
     def __add_edges_to_graph(
-            self, graph, clustered_nodes_after_sec_rule, list_of_filtered_edges
+            self, clustered_nodes_after_sec_rule, list_of_filtered_edges
     ):
         (
             node_to_cluster_edge,
@@ -424,20 +470,20 @@ class FuzzyMining(BaseMining):
         )
 
         self.__add_edges_to_graph_for_each_method(
-            node_to_cluster_edge, self.graph, False, list_of_filtered_edges
+            node_to_cluster_edge, False, list_of_filtered_edges
         )
         self.__add_edges_to_graph_for_each_method(
-            cluster_to_node_edge, self.graph, False, list_of_filtered_edges
+            cluster_to_node_edge, False, list_of_filtered_edges
         )
         self.__add_edges_to_graph_for_each_method(
-            cluster_to_cluster_edge, self.graph, False, list_of_filtered_edges
+            cluster_to_cluster_edge, False, list_of_filtered_edges
         )
         self.__add_edges_to_graph_for_each_method(
-            node_to_node_edge, self.graph, True, list_of_filtered_edges
+            node_to_node_edge, True, list_of_filtered_edges
         )
 
     def __calculate_avg_correlation_for_clustered_nodes(
-        self, correlation_after_first_rule, clustered_nodes
+            self, correlation_after_first_rule, clustered_nodes
     ):
         ret_node_to_cluster_edge = {}
         ret_cluster_to_node_edge = {}
@@ -458,28 +504,34 @@ class FuzzyMining(BaseMining):
                 if (
                         self.filtered_events[i] in self.list_of_clustered_nodes
                         and self.filtered_events[j] not in self.list_of_clustered_nodes
-                    and correlation_after_first_rule[i][j] != -1
-                    and correlation_after_first_rule[i][j] > 0
+                        and correlation_after_first_rule[i][j] > 0
                 ):
                     current_cluster = self.__get_cluster_where_node(
                         self.filtered_events[i], clustered_nodes
                     )
                     pair = (current_cluster, self.filtered_events[j])
+
+                    nodes_a = current_cluster.split(self.cluster_seperator)
+                    corr_sum, count = 0.0, 0
+                    for src in nodes_a:
+                        src_index = self.filtered_events.index(src)
+                        tgt_index = self.filtered_events.index(self.filtered_events[j])
+                        corr_val = correlation_after_first_rule[src_index][tgt_index]
+                        if corr_val == -1:
+                            corr_val = 0.0
+                        corr_sum += corr_val
+                        count += 1
+
                     if pair in ret_cluster_to_node_edge:
-                        ret_cluster_to_node_edge[pair] += correlation_after_first_rule[
-                            i
-                        ][j]
-                        ret_cluster_to_node_edge_counter[pair] += 1
+                        ret_cluster_to_node_edge[pair] += corr_sum
+                        ret_cluster_to_node_edge_counter[pair] += count
                     else:
-                        ret_cluster_to_node_edge[pair] = correlation_after_first_rule[
-                            i
-                        ][j]
-                        ret_cluster_to_node_edge_counter[pair] = 1
+                        ret_cluster_to_node_edge[pair] = corr_sum
+                        ret_cluster_to_node_edge_counter[pair] = count
                 # current_cluster --> cluster
                 elif (
                         self.filtered_events[i] in self.list_of_clustered_nodes
                         and self.filtered_events[j] in self.list_of_clustered_nodes
-                        and self.filtered_events[j]
                         and correlation_after_first_rule[i][j] > 0
                 ):
                     current_cluster = self.__get_cluster_where_node(
@@ -492,49 +544,65 @@ class FuzzyMining(BaseMining):
                     if current_cluster == next_cluster:
                         continue
                     pair = (current_cluster, next_cluster)
+                    nodes_a = current_cluster.split(self.cluster_seperator)
+                    nodes_b = next_cluster.split(self.cluster_seperator)
+
+                    corr_sum, count = 0.0, 0
+                    for src in nodes_a:
+                        for tgt in nodes_b:
+                            if src == tgt:
+                                continue
+                            src_index = self.filtered_events.index(src)
+                            tgt_index = self.filtered_events.index(tgt)
+                            corr_val = correlation_after_first_rule[src_index][tgt_index]
+                            if corr_val == -1:
+                                corr_val = 0.0
+                            corr_sum += corr_val
+                            count += 1
+
                     if pair in ret_cluster_to_cluster_edge:
-                        ret_cluster_to_cluster_edge[
-                            pair
-                        ] += correlation_after_first_rule[i][j]
-                        ret_cluster_to_cluster_edge_counter[pair] += 1
+                        ret_cluster_to_cluster_edge[pair] += corr_sum
+                        ret_cluster_to_cluster_edge_counter[pair] += count
                     else:
-                        ret_cluster_to_cluster_edge[pair] = (
-                            correlation_after_first_rule[i][j]
-                        )
-                        ret_cluster_to_cluster_edge_counter[pair] = 1
+                        ret_cluster_to_cluster_edge[pair] = corr_sum
+                        ret_cluster_to_cluster_edge_counter[pair] = count
                 # node --> current_cluster
                 elif (
                         self.filtered_events[i] not in self.list_of_clustered_nodes
                         and self.filtered_events[j] in self.list_of_clustered_nodes
-                        and correlation_after_first_rule[i][j] != -1
                         and correlation_after_first_rule[i][j] > 0
                 ):
                     next_cluster = self.__get_cluster_where_node(
                         self.filtered_events[j], clustered_nodes
                     )
                     pair = (self.filtered_events[i], next_cluster)
+
+                    nodes_b = next_cluster.split(self.cluster_seperator)
+                    corr_sum, count = 0.0, 0
+                    for tgt in nodes_b:
+                        src_index = self.filtered_events.index(self.filtered_events[i])
+                        tgt_index = self.filtered_events.index(tgt)
+                        corr_val = correlation_after_first_rule[src_index][tgt_index]
+                        if corr_val == -1:
+                            corr_val = 0.0
+                        corr_sum += corr_val
+                        count += 1
+
                     if pair in ret_node_to_cluster_edge:
-                        ret_node_to_cluster_edge[pair] += correlation_after_first_rule[
-                            i
-                        ][j]
-                        ret_node_to_cluster_edge_counter[pair] += 1
+                        ret_node_to_cluster_edge[pair] += corr_sum
+                        ret_node_to_cluster_edge_counter[pair] += count
                     else:
-                        ret_node_to_cluster_edge[pair] = correlation_after_first_rule[
-                            i
-                        ][j]
-                        ret_node_to_cluster_edge_counter[pair] = 1
-                # node ---> node
+                        ret_node_to_cluster_edge[pair] = corr_sum
+                        ret_node_to_cluster_edge_counter[pair] = count
+                # node --> node
                 elif (
                         self.filtered_events[i] not in self.list_of_clustered_nodes
                         and self.filtered_events[j] not in self.list_of_clustered_nodes
-                        and correlation_after_first_rule[i][j] != -1
                         and correlation_after_first_rule[i][j] > 0
                 ):
                     pair = (self.filtered_events[i], self.filtered_events[j])
                     if pair in ret_node_to_node_edge:
-                        ret_node_to_node_edge[pair] += correlation_after_first_rule[i][
-                            j
-                        ]
+                        ret_node_to_node_edge[pair] += correlation_after_first_rule[i][j]
                     else:
                         ret_node_to_node_edge[pair] = correlation_after_first_rule[i][j]
 
@@ -571,7 +639,7 @@ class FuzzyMining(BaseMining):
         )
 
     def __calculate_avg(
-        self, ret_node_to_cluster_edge, ret_node_to_cluster_edge_counter
+            self, ret_node_to_cluster_edge, ret_node_to_cluster_edge_counter
     ):
         result = {}
         for pair in ret_node_to_cluster_edge:
@@ -603,7 +671,6 @@ class FuzzyMining(BaseMining):
 
     def __add_normal_nodes_to_graph(
         self,
-        graph,
         nodes_after_first_rule,
         list_of_clustered_nodes,
     ):
@@ -615,8 +682,7 @@ class FuzzyMining(BaseMining):
                 spm = stats.get("spm", 0.0)
                 norm_frequency = stats.get("frequency", 0.0)
                 abs_frequency = self.filtered_appearance_freqs.get(node, 0)
-                node_sign = self.sign_dict.get(node)
-                self.graph.add_event(node, spm, norm_frequency, abs_frequency, node_sign, (w, h))
+                self.graph.add_event(node, spm, norm_frequency, abs_frequency, (w, h))
 
     def __convert_clustered_nodes_to_list(self, clustered_nodes):
         ret_nodes = []
@@ -724,16 +790,28 @@ class FuzzyMining(BaseMining):
                 return True
         return False
 
-    def __add_clustered_nodes_to_graph(self, graph, nodes, sign_dict):
+    def __add_clustered_nodes_to_graph(self, nodes, sign_dict):
         counter = 1
+        node_stats_map = {stat["node"]: stat for stat in self.get_node_statistics()}
         for cluster in nodes:
             cluster_events = cluster.split(self.cluster_seperator)
             string_cluster = "Cluster " + str(counter)
             # needed to later find the cluster id and to draw the edges
             self.cluster_id_mapping[cluster] = string_cluster
             sign = sign_dict.get(cluster_events[0])
+            merged_nodes = []
+            for node_id in cluster_events:
+                stats = node_stats_map.get(node_id, {})
+                merged_nodes.append(
+                    {
+                        "id": node_id,
+                        "spm": stats.get("spm", 0.0),
+                        "norm_freq": stats.get("frequency", 0.0),
+                        "abs_freq": self.filtered_appearance_freqs.get(node_id, 0),
+                    }
+                )
             # print(string_cluster + ": " + str(cluster))
-            self.graph.add_cluster(string_cluster, sign, (1.5, 1.0), cluster_events)
+            self.graph.add_cluster(string_cluster, sign, (1.5, 1.0), merged_nodes)
             counter += 1
 
     def __calculate_significant_nodes(self, corr_after_first_rule):

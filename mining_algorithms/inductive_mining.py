@@ -1,15 +1,15 @@
-from mining_algorithms.base_mining import BaseMining
+from graphs.cuts import exclusive_cut, parallel_cut, sequence_cut, loop_cut
+from graphs.dfg import DFG
+from graphs.visualization.inductive_graph import InductiveGraph
+from logger import get_logger
+from logs.filters import filter_events, filter_traces
 from logs.splits import (
     exclusive_split,
     parallel_split,
     sequence_split,
     loop_split,
 )
-from graphs.cuts import exclusive_cut, parallel_cut, sequence_cut, loop_cut
-from graphs.dfg import DFG
-from graphs.visualization.inductive_graph import InductiveGraph
-from logs.filters import filter_events, filter_traces
-from logger import get_logger
+from mining_algorithms.base_mining import BaseMining
 
 
 class InductiveMining(BaseMining):
@@ -25,12 +25,10 @@ class InductiveMining(BaseMining):
         """
         super().__init__(log)
         self.logger = get_logger("InductiveMining")
-        self.activity_threshold = 0.0
         self.traces_threshold = 0.2
         self.filtered_log = None
 
-    def generate_graph(self, spm_threshold: float, node_freq_threshold: float, activity_threshold: float,
-                       traces_threshold: float):
+    def generate_graph(self, spm_threshold: float, node_freq_threshold: float, traces_threshold: float):
         """Generate a graph from the log using the Inductive Mining algorithm.
 
         Parameters
@@ -44,14 +42,10 @@ class InductiveMining(BaseMining):
         edge_freq_threshold : float
             The threshold for the normalized frequency of edges (direct event transitions). Only edges with a
             relative frequency equal to or higher than this threshold will be included in the graph.
-        activity_threshold : float
-            The activity threshold for the filtering of the log.
-            All events with a frequency lower than the threshold * max_event_frequency will be removed.
         traces_threshold : float
             The traces threshold for the filtering of the log.
             All traces with a frequency lower than the threshold * max_trace_frequency will be removed.
         """
-        self.activity_threshold = activity_threshold
         self.traces_threshold = traces_threshold
         self.spm_threshold = spm_threshold
         self.node_freq_threshold = node_freq_threshold
@@ -65,7 +59,7 @@ class InductiveMining(BaseMining):
 
         self.node_sizes = {k: self.calculate_node_size(k) for k in self.filtered_events}
 
-        events_to_remove = self.get_events_to_remove(activity_threshold)
+        events_to_remove = self.get_events_to_remove(node_freq_threshold)
 
         self.logger.debug(f"Events to remove: {events_to_remove}")
         min_traces_frequency = self.calculate_minimum_traces_frequency(traces_threshold)
@@ -228,16 +222,6 @@ class InductiveMining(BaseMining):
             A set containing all unique events in the log.
         """
         return set(event for case in log for event in case if event in self.filtered_events)
-
-    def get_activity_threshold(self) -> float:
-        """Get the activity threshold used for filtering the log.
-
-        Returns
-        -------
-        float
-            The activity threshold
-        """
-        return self.activity_threshold
 
     def get_traces_threshold(self) -> float:
         """Get the traces threshold used for filtering the log.
