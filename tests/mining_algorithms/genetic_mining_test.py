@@ -58,6 +58,27 @@ class TestGeneticMining(unittest.TestCase):
         self.gm._mutate(child1, 0.9)
         self.assertIn("I", child1)
 
+    def test_resolve_overlaps_produces_disjoint_sets(self):
+        merged_set_1 = [{1, 2, 3}, {4, 5}, {2, 5}, {4, 6}, {7}]
+        resolved_set_1 = self.gm._resolve_overlaps(merged_set_1)
+
+        self.logger.debug(f"Resolved Set 1: {resolved_set_1}")
+
+        all_elems = set()
+        for s in resolved_set_1:
+            self.assertTrue(all_elems.isdisjoint(s), f"Overlap detected in Set 1 with subset {s}")
+            all_elems |= s
+
+        merged_set_2 = [{1, 2, 3}, {2, 3, 4}, {3, 4, 5}, {1, 5}, {2, 5}, {4, 6}, {5, 6}, {6, 7}, {1, 7}]
+        resolved_set_2 = self.gm._resolve_overlaps(merged_set_2)
+
+        self.logger.debug(f"Resolved Set 2: {resolved_set_2}")
+
+        all_elems = set()
+        for s in resolved_set_2:
+            self.assertTrue(all_elems.isdisjoint(s), f"Overlap detected in Set 2 with subset {s}")
+            all_elems |= s
+
     def test_generate_graph_empty_events(self):
         self.gm.generate_graph(1.0, 0, 100, 200, 0.8, 0.1, 0.2, 5, 1)
         self.assertIsInstance(self.gm.graph, GeneticGraph)

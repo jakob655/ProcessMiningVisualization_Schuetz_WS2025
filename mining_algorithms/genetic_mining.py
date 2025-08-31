@@ -2,6 +2,7 @@ import random
 import threading
 import uuid
 
+import numpy as np
 import streamlit as st
 
 from graphs.visualization.genetic_graph import GeneticGraph
@@ -147,9 +148,21 @@ class GeneticMining(BaseMining):
 
     def _initialize_dependency_matrix(self):
         """
-        Compute dependency measures, start measures, and end measures from the log traces.
-        - Dependency measures capture causal likelihood between activities, handling loops of length one and two.
-        - Start and end measures identify likely start and end activities.
+        Compute dependency, start, and end measures from the log traces.
+
+        Dependency measures capture causal likelihood between activities, handling loops of length one and two.
+        - L2L(a, b): number of length-two loops (a -> b -> a)
+        - follows(a, b): number of times a is directly followed by b
+        - L1L(a): number of self-loops (a -> a)
+
+        Dependency measure D(a,b) is computed as:
+        - Case 1 (length-two loop): (L2L(a,b) + L2L(b,a)) / (L2L(a,b) + L2L(b,a) +1)
+        - Case 2 (no length-two loop, a != b): (follows(a,b) - follows(b,a)) / (follows(a,b) + follows(b,a) +1)
+        - Case 3 (length-one loop (self-loop), a == b): L1L(a) / (L1L(a) +1)
+
+        Start and end measures identify likely start and end activities.
+        - Start measure: S(t) = D(start,t)
+        - End measure:   E(t) = D(t,end)
 
         Returns
         -------
@@ -157,66 +170,73 @@ class GeneticMining(BaseMining):
             Updates self.dependency_matrix, self.start_measures, and self.end_measures.
         """
         all_activities = ['start'] + list(self.events) + ['end']
+        activity_idx = {a: i for i, a in enumerate(all_activities)}
+        n = len(all_activities)
 
-        follows = {(a, b): 0 for a in all_activities for b in all_activities}
-        L1L = {a: 0 for a in all_activities}
-        L2L = {(a, b): 0 for a in all_activities for b in all_activities}
+        follows = np.zeros((n, n), dtype=np.int32)
+        L1L = np.zeros(n, dtype=np.int32)
+        L2L = np.zeros((n, n), dtype=np.int32)
 
+        # Count over all traces
         for trace in self.log:
             # Add virtual start and end activities to each trace
             extended_trace = ['start'] + list(trace) + ['end']
+            idx = np.fromiter((activity_idx[x] for x in extended_trace), count=len(extended_trace),dtype=np.int32)
 
-            # Count follows and L1L
-            for i in range(len(extended_trace) - 1):
-                a, b = extended_trace[i], extended_trace[i + 1]
-                follows[(a, b)] += 1
-                if a == b:
-                    L1L[a] += 1
+            # follows and L1L
+            if idx.size >= 2:
+                a, b = idx[:-1], idx[1:]
+                np.add.at(follows, (a, b), 1)
+                np.add.at(L1L, a[a == b], 1)
 
-            # Count L2L
-            for i in range(len(extended_trace) - 2):
-                a, b, c = extended_trace[i], extended_trace[i + 1], extended_trace[i + 2]
-                if a == c and a != b:  # length-two-loop pattern "aba"
-                    L2L[(a, b)] += 1
+            # L2L
+            if idx.size >= 3:
+                a, b, c = idx[:-2], idx[1:-1], idx[2:]
+                mask = (a == c) & (a != b)
+                np.add.at(L2L, (a[mask], b[mask]), 1)
+
+        start, end = activity_idx['start'], activity_idx['end']
 
         # Initialize dependency matrix and start/end measures for all activity pairs
         for a in self.events:
+            idx_a = activity_idx[a]
             for b in self.events:
+                idx_b = activity_idx[b]
                 if a != b:
-                    l2l_ab = L2L[(a, b)]
-                    l2l_ba = L2L[(b, a)]
+                    l2l_ab = L2L[(idx_a, idx_b)]
+                    l2l_ba = L2L[(idx_b, idx_a)]
                     if l2l_ab > 0:
                         # Case 1: Length-two loop exists
                         self.dependency_matrix[(a, b)] = (l2l_ab + l2l_ba) / (l2l_ab + l2l_ba + 1.0)
                     else:
                         # Case 2: No length-two loop
-                        fab = follows[(a, b)]
-                        fba = follows[(b, a)]
+                        fab = follows[(idx_a, idx_b)]
+                        fba = follows[(idx_b, idx_a)]
                         self.dependency_matrix[(a, b)] = (fab - fba) / (fab + fba + 1.0)
                 else:
                     # Case 3: Length-one loop (a == b)
-                    l1l = L1L[a]
+                    l1l = L1L[idx_a]
                     self.dependency_matrix[(a, b)] = l1l / (l1l + 1.0)
 
             # Calculate S(t) = D(start,t), E(t) = D(t,end)
             # S(t)
-            l2l_sa = L2L[('start', a)]
-            l2l_as = L2L[(a, 'start')]
+            l2l_sa = L2L[(start, idx_a)]
+            l2l_as = L2L[(idx_a, start)]
             if l2l_sa > 0:
                 self.start_measures[a] = (l2l_sa + l2l_as) / (l2l_sa + l2l_as + 1.0)
             else:
-                f_sa = follows[('start', a)]
-                f_as = follows[(a, 'start')]
+                f_sa = follows[(start, idx_a)]
+                f_as = follows[(idx_a, start)]
                 self.start_measures[a] = (f_sa - f_as) / (f_sa + f_as + 1.0)
 
             # E(t)
-            l2l_ae = L2L[(a, 'end')]
-            l2l_ea = L2L[('end', a)]
+            l2l_ae = L2L[(idx_a, end)]
+            l2l_ea = L2L[(end, idx_a)]
             if l2l_ae > 0:
                 self.end_measures[a] = (l2l_ae + l2l_ea) / (l2l_ae + l2l_ea + 1.0)
             else:
-                f_ae = follows[(a, 'end')]
-                f_ea = follows[('end', a)]
+                f_ae = follows[(idx_a, end)]
+                f_ea = follows[(end, idx_a)]
                 self.end_measures[a] = (f_ae - f_ea) / (f_ae + f_ea + 1.0)
 
     def _run_genetic_miner(self, population_size, max_generations, crossover_rate, mutation_rate, elitism_rate,
@@ -499,17 +519,17 @@ class GeneticMining(BaseMining):
         """
         Create a new individual guided by dependency measures.
 
-        Initialization procedure:
+        Steps:
         1. Randomize causal matrix using dependency values.
         2. Apply start wipes.
         3. Apply end wipes.
-        4 & 5. Build INPUT and OUTPUT and generate partitions.
+        4 & 5. Build INPUT and OUTPUT sets and create partitions.
         6. Derive causal relation set C.
 
         Parameters
         ----------
         activities : list[str]
-            List of all activity labels.
+            List of all activities.
         power_value : int
             Odd power value controlling rarity of causal relations.
 
@@ -518,40 +538,36 @@ class GeneticMining(BaseMining):
         dict
             Individual with keys: 'activities', 'C', 'I', 'O'.
         """
-        causal_matrix = {}
+        n = len(activities)
+        activity_idx = {a: i for i, a in enumerate(activities)}
+
+        # Build D matrix from dict
+        D = np.zeros((n, n), dtype=float)
+        for (a, b), val in self.dependency_matrix.items():
+            if a in activity_idx and b in activity_idx:
+                D[activity_idx[a], activity_idx[b]] = val
 
         # Step 1: probabilistic causal matrix
-        for a in activities:
-            for b in activities:
-                D_a_b = self.dependency_matrix.get((a, b), 0.0)
-                r = random.random()
-                if r < (D_a_b ** power_value):
-                    causal_matrix[(a, b)] = 1
-                else:
-                    causal_matrix[(a, b)] = 0
+        causal_matrix = (np.random.rand(n, n) < (np.clip(D, 0.0, 1.0) ** power_value)).astype(int)
 
         # Step 2: apply S(t) wipe (columns)
-        for a in activities:
-            r = random.random()
-            if r < (self.start_measures.get(a, 0.0) ** power_value):
-                for b in activities:
-                    causal_matrix[(b, a)] = 0
+        for a, idx_a in activity_idx.items():
+            if np.random.rand() < (self.start_measures.get(a, 0.0) ** power_value):
+                causal_matrix[:, idx_a] = 0
 
         # Step 3: apply E(t) wipe (rows)
-        for a in activities:
-            r = random.random()
-            if r < (self.end_measures.get(a, 0.0) ** power_value):
-                for b in activities:
-                    causal_matrix[(a, b)] = 0
+        for a, idx_a in activity_idx.items():
+            if np.random.rand() < (self.end_measures.get(a, 0.0) ** power_value):
+                causal_matrix[idx_a, :] = 0
 
         # Step 4 & 5: build INPUT & OUTPUT sets
         I = {}
         O = {}
-        for a in activities:
-            preds = {b for b in activities if causal_matrix.get((b, a), 0) == 1}
+        for a, idx_a in activity_idx.items():
+            preds = {activities[j] for j in np.where(causal_matrix[:, idx_a] == 1)[0]}
             I[a] = [s for s in self._create_partition(preds) if s]
 
-            succs = {b for b in activities if causal_matrix.get((a, b), 0) == 1}
+            succs = {activities[j] for j in np.where(causal_matrix[idx_a, :] == 1)[0]}
             O[a] = [s for s in self._create_partition(succs) if s]
 
         # Step 6: derive C from O
@@ -809,30 +825,27 @@ class GeneticMining(BaseMining):
         Returns
         -------
         list[set[str]]
-            Updated list of subsets with overlaps resolved.
+            Updated list of disjoint subsets.
         """
-        resolved = []
+        resolved = [set(s) for s in subsets if s]
 
-        for s in subsets:
-            s = set(s)
-            if not s:
-                continue
-
-            while True:
-                overlap_found = False
-                for r in resolved:
-                    if s & r:  # overlap found
-                        overlap_found = True
+        changed = True
+        while changed:
+            changed = False
+            for i in range(len(resolved)):
+                for j in range(i + 1, len(resolved)):
+                    if not resolved[i].isdisjoint(resolved[j]):  # overlap found
                         if random.random() < 0.5:
-                            r |= s  # merge
-                            s = set()  # s is consumed
-                            break
+                            resolved[i] |= resolved[j]  # merge
+                            resolved.pop(j)
                         else:
-                            s -= r  # remove overlaps from s
-                if not overlap_found:
+                            resolved[j] -= resolved[i]  # remove
+                            if not resolved[j]:
+                                resolved.pop(j)
+                        changed = True
+                        break
+                if changed:
                     break
-            if s:
-                resolved.append(s)
 
         return resolved
 
