@@ -87,7 +87,6 @@ class HeuristicGraph(BaseGraph):
         **edge_data
             additional data for the edge
         """
-        # add dependency threshold for expander on-click
         rounded_freq = None
         if normalized_frequency:
             rounded_freq = round(normalized_frequency, 2)

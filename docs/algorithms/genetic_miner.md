@@ -43,15 +43,20 @@ Unlike local search-based miners (e.g., Alpha, Heuristic, Inductive), the Geneti
 2. ### **Genetic Evolution**
 - The population of individuals is evolved across generations, using GA operators:
   - **Fitness Evaluation**  
-    - Each trace is parsed with a token-game simulation.  
-    - Tokens are consumed from INPUT sets and produced into OUTPUT sets.  
-    - OR-branches are tracked and resolved.  
+    - Each trace is parsed with a token-game simulation.
+    - An event is considered parsed if it successfully fires (all of its input conditions are satisfied).
+    - Tokens are consumed from INPUT sets and produced into OUTPUT sets.
+    - INPUT semantics: an activity is enabled if all of its input sets are satisfied  
+      * A single input set is satisfied if at least one of its members has a token (OR).  
+      * All input sets must be satisfied together (AND across sets).  
+    - Self-loops are handled explicitly.
     - A trace is complete if no tokens remain at the end.  
     - Fitness function:
 
   $$
   Fitness(PM, L) = 0.40 \cdot \frac{\text{parsed activities}}{\text{total activities}} + 0.60 \cdot \frac{\text{completed traces}}{\text{total traces}}
   $$
+
   - **Elitism**  
     - The top `elitism_rate × population_size` individuals are copied unchanged into the next generation.
   - **Tournament Selection**  

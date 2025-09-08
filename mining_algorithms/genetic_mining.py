@@ -1,6 +1,7 @@
 import random
 import threading
 import uuid
+from collections import Counter
 
 import numpy as np
 import streamlit as st
@@ -640,21 +641,18 @@ class GeneticMining(BaseMining):
     @staticmethod
     def _parse_trace_token_game(individual, trace):
         """
-        Parse a single trace using a token-game simulation.
+        Simulate parsing of a single trace using token-game semantics. (2.2 Parsing Semantics, Alves de Medeiros et al. (2005))
 
-        Each event is checked against INPUT sets, consumes/produces tokens
-        via OUTPUT sets, and OR-splits/joins are tracked explicitly.
-        Completion is defined as no tokens left at the end.
-
-        Note
-        ----
-        In Alves de Medeiros et al. (2005, Sec. 2.2), an activity is enabled if
-        at least one element of each INPUT subset holds a token (AND-of-OR semantics).
-        Here, the check is inverted: execution is allowed as long as no conflicting
-        tokens are present (self-loops never block). This differs from the formal
-        description but results in equivalent behavior in practice, while simplifying
-        the handling of L1L/L2L and OR/AND cases.
-
+        For each event in the trace:
+        - INPUT semantics: an activity is enabled if all of its input sets are satisfied.
+            * A single input set is satisfied if at least one of its members currently holds a token (OR relation).
+            * All input sets must be satisfied together (AND across sets).
+        - When enabled, tokens are consumed from the satisfied input sets.
+        - Tokens are produced to all OUTPUT sets.
+        - Empty INPUT sets denote start activities, empty OUTPUT sets denote end activities.
+        - Self-loops are handled explicitly: tokens remain on the same activity if it produces itself.
+        - A trace is considered complete if no tokens remain at the end.
+        
         Parameters
         ----------
         individual : dict
@@ -670,54 +668,44 @@ class GeneticMining(BaseMining):
         I, O = individual['I'], individual['O']
         marking = {a: 0 for a in individual['activities']}
         parsed_count = 0
-        saved_or_cases = []  # track active (X)OR-branches
 
         for event in trace:
             input_sets = I.get(event, [])
+            out_sets = O.get(event, [])
 
+            # Handle start events
             if (not input_sets or set() in input_sets) and marking[event] == 0:
                 marking[event] = 1
 
-            # Check if event is enabled and input sets are satisfied
-            can_execute = False
-            if marking.get(event, 0) > 0:  # must be enabled by predecessor
-                ok = True
-                for subset in input_sets:
-                    if subset:
-                        # Special-case: self-loop must not block
-                        effective_subset = subset - {event}
-                        if any(marking.get(x, 0) > 0 for x in effective_subset):
-                            ok = False
-                            break
-                if ok:
-                    can_execute = True
+            can_execute = True
 
-            if not can_execute:
-                continue
+            # Check if input sets are satisfied
+            for input_set in input_sets:
+                if not input_set:
+                    break
 
-            # Consume the event
-            marking[event] = 0
+                if not any(marking.get(x, 0) > 0 for x in input_set if x != event):
+                    can_execute = False
 
-            # Produce tokens
-            for out_set in O.get(event, []):
-                if not out_set:
-                    continue
-                if len(out_set) > 1:
-                    # OR-split: save the OR-case for later resolution
-                    saved_or_cases.append(out_set)
-                for succ in out_set:
-                    marking[succ] = 1
+                # Consume tokens
+                for x in input_set:
+                    if marking[x] > 0:
+                        marking[x] -= 1
 
-            # OR-join resolution
-            for or_set in saved_or_cases[:]:
-                if event in or_set:
-                    for s in or_set:
-                        marking[s] = 0  # disable all others in the OR-branch
-                    saved_or_cases.remove(or_set)
+            if can_execute:
+                parsed_count += 1
 
-            parsed_count += 1
+            if out_sets:
+                succ_counter = Counter(s for out_set in out_sets for s in out_set)
+                for succ, count in succ_counter.items():
+                    marking[succ] += count
 
-        is_completed = (sum(marking.values()) == 0)
+            # Handle end events
+            has_self_loop = any({event} <= out_set for out_set in out_sets)
+            if not has_self_loop and (not out_sets or set() in out_sets) and marking[event] > 0:
+                marking[event] = 0
+
+        is_completed = all(v == 0 for v in marking.values())
         return parsed_count, is_completed
 
     def _crossover(self, parent1, parent2):
