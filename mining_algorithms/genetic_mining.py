@@ -1010,7 +1010,6 @@ class GeneticMining(BaseMining):
     @staticmethod
     def _is_end_activity(act, O):
         """
-
         Check whether an activity is an end activity.
 
         Returns

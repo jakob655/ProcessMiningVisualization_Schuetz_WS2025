@@ -297,6 +297,32 @@ class BaseGraph:
             else:
                 self.add_edge(node, ending_node, weight=None, **edge_attributes)
 
+    def compute_penwidth(self, edge_attributes: dict) -> str:
+        """Compute the penwidth for visualization.
+
+        This method enforces a minimum edge thickness and allows subclasses
+        to override the logic if algorithm-specific rules are required.
+
+        Parameters
+        ----------
+        edge_attributes : dict
+            The edge attributes passed to Graphviz.
+
+        Returns
+        -------
+        str
+            The computed penwidth as a string.
+        """
+        base_penwidth = 3.0
+        raw_penwidth = edge_attributes.get("penwidth", 0)
+
+        if raw_penwidth in (None, "", "None"):
+            custom_penwidth = 0.0
+        else:
+            custom_penwidth = float(raw_penwidth)
+
+        return str(base_penwidth + custom_penwidth)
+
     def add_edge(
             self,
             source_id: str | int,
@@ -342,16 +368,7 @@ class BaseGraph:
         else:
             label = str(weight)
 
-        # Enforce min penwidth and add custom value on top
-        base_penwidth = 3.0
-        raw_penwidth = edge_attributes.get("penwidth", 0)
-
-        if raw_penwidth in (None, "", "None"):
-            custom_penwidth = 0.0
-        else:
-            custom_penwidth = float(raw_penwidth)
-
-        edge_attributes["penwidth"] = str(base_penwidth + custom_penwidth)
+        edge_attributes["penwidth"] = self.compute_penwidth(edge_attributes)
 
         graphviz_source_id = self.substitiute_colons(edge.source)
         graphviz_target_id = self.substitiute_colons(edge.destination)
