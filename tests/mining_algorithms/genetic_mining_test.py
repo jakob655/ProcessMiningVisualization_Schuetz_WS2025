@@ -80,13 +80,13 @@ class TestGeneticMining(unittest.TestCase):
             all_elems |= s
 
     def test_generate_graph_empty_events(self):
-        self.gm.generate_graph(1.0, 0, 100, 200, 0.8, 0.1, 0.2, 5, 1)
+        self.gm.generate_graph(1.0, 0, 0, 100, 200, 0.8, 0.1, 0.2, 5, 1)
         self.assertIsInstance(self.gm.graph, GeneticGraph)
         self.assertTrue(self.gm.graph.contains_node("Start"))
         self.assertTrue(self.gm.graph.contains_node("End"))
 
     def test_generate_graph_with_events(self):
-        self.gm.generate_graph(0.0, 0, 100, 200, 0.8, 0.2, 0.1, 5, 1)
+        self.gm.generate_graph(0.0, 0, 0, 100, 200, 0.8, 0.2, 0.1, 5, 1)
         self.assertIsInstance(self.gm.graph, GeneticGraph)
         self.assertTrue(self.gm.graph.contains_node("Start"))
         self.assertTrue(self.gm.graph.contains_node("End"))
@@ -108,8 +108,8 @@ class TestGeneticMining(unittest.TestCase):
     def test_parse_trace_token_game(self):
         individual = {
             "activities": {"A", "B", "H"},
-            "I": {"A": [set()],"B": [{"A"}],"H": [{"B"}]},
-            "O": {"A": [{"B"}],"B": [{"H"}],"H": [set()]},
+            "I": {"A": [set()], "B": [{"A"}], "H": [{"B"}]},
+            "O": {"A": [{"B"}], "B": [{"H"}], "H": [set()]},
             "C": {("A", "B"), ("B", "H")}
         }
 
@@ -139,8 +139,8 @@ class TestGeneticMining(unittest.TestCase):
     def test_parse_trace_token_game_L2L(self):
         individual = {
             "activities": {"A", "B"},
-            "I": {"A": [set(), {"B"}],"B": [{"A"}]},
-            "O": {"A": [{"B"}],"B": [{"A"}, set()]},
+            "I": {"A": [set(), {"B"}], "B": [{"A"}]},
+            "O": {"A": [{"B"}], "B": [{"A"}, set()]},
             "C": {("A", "B"), ("B", "A")}
         }
 
@@ -196,7 +196,8 @@ class TestGeneticMining(unittest.TestCase):
         self.assertTrue(completed_andor)
 
         trace_andor_invalid = ["A", "Z"]  # missing C
-        parsed_count_andor_inv, completed_andor_inv = self.gm._parse_trace_token_game(individual_andor, trace_andor_invalid)
+        parsed_count_andor_inv, completed_andor_inv = self.gm._parse_trace_token_game(individual_andor,
+                                                                                      trace_andor_invalid)
         self.assertLess(parsed_count_andor_inv, 2, "AND-of-ORs semantics failed: Z should not fire without C")
         self.assertTrue(completed_andor_inv)
 
@@ -220,12 +221,14 @@ class TestGeneticMining(unittest.TestCase):
             "C": set()
         }
         trace_multi_and_valid = ["A", "B", "C", "Z"]
-        parsed_count_multi_and, completed_multi_and = self.gm._parse_trace_token_game(individual_multi_and, trace_multi_and_valid)
+        parsed_count_multi_and, completed_multi_and = self.gm._parse_trace_token_game(individual_multi_and,
+                                                                                      trace_multi_and_valid)
         self.assertEqual(parsed_count_multi_and, 4, "Multi-AND semantics failed: all three inputs should enable Z")
         self.assertTrue(completed_multi_and)
 
         trace_multi_and_invalid = ["A", "B", "Z"]  # missing C
-        parsed_count_multi_and_inv, completed_multi_and_inv = self.gm._parse_trace_token_game(individual_multi_and, trace_multi_and_invalid)
+        parsed_count_multi_and_inv, completed_multi_and_inv = self.gm._parse_trace_token_game(individual_multi_and,
+                                                                                              trace_multi_and_invalid)
         self.assertLess(parsed_count_multi_and_inv, 3, "Multi-AND semantics failed: Z should not fire without C")
         self.assertTrue(completed_multi_and_inv)
 
@@ -237,13 +240,14 @@ def read(filename, timeLabel="Timestamp", caseLabel="Case ID", eventLabel="Activ
         timeLabel, caseLabel, eventLabel
     )
 
+
 class TestGeneticMiningIntegration(unittest.TestCase):
 
     def test_csv_log_integration(self):
         log_dict = read("tests/testcsv/genetic_test.csv")
 
         gm = GeneticMining(log_dict)
-        gm.generate_graph(0.2, 0, 200, 100, 0.8, 0.2, 0.1, 2, 1)
+        gm.generate_graph(0.2, 0, 0, 200, 100, 0.8, 0.2, 0.1, 2, 1)
 
         self.__check_graph_integrity(gm.graph)
 
@@ -252,7 +256,7 @@ class TestGeneticMiningIntegration(unittest.TestCase):
         log_dict = cases_list_to_dict(log)
 
         gm = GeneticMining(log_dict)
-        gm.generate_graph(0.5, 1, 200, 100, 0.8, 0.2, 0.1, 2, 1)
+        gm.generate_graph(0.5, 1, 4, 200, 100, 0.8, 0.2, 0.1, 2, 1)
 
         self.__check_graph_integrity(gm.graph)
 

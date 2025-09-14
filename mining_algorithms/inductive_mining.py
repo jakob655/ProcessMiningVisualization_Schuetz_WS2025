@@ -28,7 +28,8 @@ class InductiveMining(BaseMining):
         self.traces_threshold = 0.2
         self.filtered_log = None
 
-    def generate_graph(self, spm_threshold: float, node_freq_threshold: float, traces_threshold: float):
+    def generate_graph(self, spm_threshold: float, node_freq_threshold_normalized: float,
+                       node_freq_threshold_absolute: int, traces_threshold: float):
         """Generate a graph from the log using the Inductive Mining algorithm.
 
         Parameters
@@ -36,19 +37,18 @@ class InductiveMining(BaseMining):
         spm_threshold : float
             The threshold for the SPM (Search Process Model) score. Events with an SPM score below this value
             will be filtered out before generating the graph.
-        node_freq_threshold : float
-            The threshold for the normalized frequency of nodes (events). Only nodes with a relative frequency
-            equal to or higher than this threshold will be kept.
-        edge_freq_threshold : float
-            The threshold for the normalized frequency of edges (direct event transitions). Only edges with a
-            relative frequency equal to or higher than this threshold will be included in the graph.
+        node_freq_threshold_normalized : float
+            The threshold for the normalized frequency of nodes (events).
+        node_freq_threshold_absolute: : int
+            The threshold for the absolute frequency of nodes (events).
         traces_threshold : float
             The traces threshold for the filtering of the log.
             All traces with a frequency lower than the threshold * max_trace_frequency will be removed.
         """
         self.traces_threshold = traces_threshold
         self.spm_threshold = spm_threshold
-        self.node_freq_threshold = node_freq_threshold
+        self.node_freq_threshold_normalized = node_freq_threshold_normalized
+        self.node_freq_threshold_absolute = node_freq_threshold_absolute
 
         self.recalculate_model_filters()
 
@@ -59,7 +59,7 @@ class InductiveMining(BaseMining):
 
         self.node_sizes = {k: self.calculate_node_size(k) for k in self.filtered_events}
 
-        events_to_remove = self.get_events_to_remove(node_freq_threshold)
+        events_to_remove = self.get_events_to_remove(node_freq_threshold_normalized)
 
         self.logger.debug(f"Events to remove: {events_to_remove}")
         min_traces_frequency = self.calculate_minimum_traces_frequency(traces_threshold)
@@ -201,7 +201,6 @@ class InductiveMining(BaseMining):
         # the event has to occure more than once in a trace,
         #  otherwise it would be a base case
         if len(log_alphabet) == 1:
-
             return ("loop", list(log_alphabet)[0], "tau")
 
         # if there are multiple events in the log

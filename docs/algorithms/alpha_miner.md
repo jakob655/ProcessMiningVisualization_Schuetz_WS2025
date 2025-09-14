@@ -81,9 +81,14 @@ The **SPM value** ranges from 0.0 to 1.0 and reflects the semantic quality of a 
 *For more information on the SPM metric, see: Marian Lux, Stefanie Rinderle-Ma, Andrei Preda: “Assessing the Quality of Search Process Models.”  
 Available online: https://ucrisportal.univie.ac.at/en/publications/assessing-the-quality-of-search-process-models*
 
-**Node frequency**
+**Node frequency (normalized)**  
+Measures how often each event (node) appears relative to the most frequent node in the (SPM-filtered) log.  
+The result is a value between 0.0 and 1.0. Nodes with a normalized frequency below the threshold are removed.  
 
-Measures how often each event (node) appears relative the most frequent event in the SPM-filtered log. The result is a normalized value between 0.0 and 1.0. Nodes with a frequency below a defined threshold are removed after SPM filtering.
+**Node frequency (absolute)**  
+Counts the total number of occurrences of each event (node) in the log. Nodes with an absolute frequency below the threshold are removed.  
+
+*Both thresholds are synchronized: adjusting one automatically updates the other, so the normalized and absolute values always stay consistent.*
 
 ---
 

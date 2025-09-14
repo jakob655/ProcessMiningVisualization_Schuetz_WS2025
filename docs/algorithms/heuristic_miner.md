@@ -6,18 +6,29 @@ The algorithm creates a directly-follows graph and stores it as a succession mat
 
 ## Metrics
 
-Currently, five metrics are used to simplify the graph, the **SPM metric**, the **Node frequency metric**, the **Edge frequency metric**, the **frequency metric** and the **dependency metric**.
+Currently, four metrics are used to simplify the graph, the **SPM metric**, the **Node frequency metric**, the **Edge frequency metric** and the **dependency metric**.
 
 The **SPM filter** simplifies process models by removing low-quality nodes based on their frequency and connectivity. It scores each node using the **spm metric**, which balances complexity and common behavior. This abstraction helps generate clearer, more interpretable models. Especially useful for user-driven processes like search behavior.
 
 *For more information on the SPM metric, see: Marian Lux, Stefanie Rinderle-Ma, Andrei Preda: “Assessing the Quality of Search Process Models.”  
 Available online: https://ucrisportal.univie.ac.at/en/publications/assessing-the-quality-of-search-process-models*
 
-**Node frequency** measures how often each event (node) appears relative to the most frequent node in the log. The value is normalized between 0.0 and 1.0 and is calculated after the SPM filtering step.
+**Node frequency (normalized)**  
+Measures how often each event (node) appears relative to the most frequent node in the (SPM-filtered) log.  
+The result is a value between 0.0 and 1.0. Nodes with a normalized frequency below the threshold are removed.  
 
-**Edge frequency** reflects how often a direct transition (edge) between two nodes occurs, again normalized by the maximum edge frequency in the log.
+**Node frequency (absolute)**  
+Counts the total number of occurrences of each event (node) in the log. Nodes with an absolute frequency below the threshold are removed.
 
-The **frequency metric** is calculated for edges and nodes/events. The event frequency counts the occurrences of an event in the log. The edge frequency counts the number of times one event is directly followed by another event.
+**Edge frequency (normalized)**  
+Reflects how often a direct transition (edge) between two nodes occurs relative to the most frequent edge in the log.  
+The result is a value between 0.0 and 1.0. Edges with a normalized frequency below the threshold are removed.  
+
+**Edge frequency (absolute)**  
+Counts the total number of times one event is directly followed by another in the log.  
+Edges with an absolute frequency below the threshold are removed.
+
+*The node and edge thresholds are synchronized: adjusting one automatically updates the other, so the normalized and absolute values always stay consistent.*
 
 The **dependency metric** determines, how one-sided a relationship is between two edges. It compares how dependent an edge is by the following formula:
 
@@ -31,14 +42,14 @@ where **S(a > b)** means the entry in the succession matrix from a to b
 
 ## Filtering
 
-There are five filtering parameters in the current implementation of the heuristic miner: the **SPM filter**, **node frequency**, **edge frequency**, **minimum frequency**, and the **dependency threshold**.
+There are four filtering parameters in the current implementation of the heuristic miner: the **SPM filter**, **node frequency**, **edge frequency** and the **dependency threshold**.
 
 The **SPM value** ranges from 0.0 to 1.0 and reflects the semantic quality of a node. It defines the threshold below which nodes are considered low-quality due to low frequency or high complexity, and may be removed for abstraction.
 
-The **node frequency** value is in the range of 0.0 to 1.0. It filters out nodes that appear too rarely in the log. Nodes below this threshold are removed after the SPM filtering step.
+The **node frequency (normalized)** value is in the range of 0.0 to 1.0. It filters out nodes that appear too rarely in the log, relative to the most frequent node.  
+The **node frequency (absolute)** value is an integer count of event occurrences in the log. It filters out nodes below a chosen absolute frequency.
 
-The **edge frequency** value is in the range of 0.0 to 1.0. It filters out transitions (edges) that occur too infrequently in the log. These edges are removed before utility-based edge filtering is applied.
-
-The **minimum frequency** filters out edges, that have a lower frequency than that threshold. The range of this threshold is from 0 to the maximum edge frequency. Additionally, nodes with a lower frequency are also removed.
+The **edge frequency (normalized)** value is in the range of 0.0 to 1.0. It filters out transitions (edges) that occur too infrequently in the log, relative to the most frequent edge.  
+The **edge frequency (absolute)** value counts the raw number of times one event is directly followed by another. Edges below this threshold are removed.
 
 The **dependency threshold** is in the range of 0.0 to 1.0. It removed edges, that have a lower dependency score than that threshold.

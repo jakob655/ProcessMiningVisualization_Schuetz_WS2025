@@ -52,13 +52,22 @@ class BaseAlgorithmView(BaseView):
                 help="Filter nodes based on the SPM metric threshold.",
             )
 
-        if "node_frequency_threshold" in sidebar_values:
+        if "node_frequency_threshold_normalized" in sidebar_values:
             number_input_slider(
-                label="Node Frequency",
-                min_value=sidebar_values["node_frequency_threshold"][0],
-                max_value=sidebar_values["node_frequency_threshold"][1],
-                key="node_frequency_threshold",
-                help="Filter nodes based on their frequency.",
+                label="Node Frequency (normalized)",
+                min_value=sidebar_values["node_frequency_threshold_normalized"][0],
+                max_value=sidebar_values["node_frequency_threshold_normalized"][1],
+                key="node_freq_threshold_normalized",
+                help="Filter nodes based on normalized frequency (0–1).",
+            )
+
+        if "node_frequency_threshold_absolute" in sidebar_values:
+            number_input_slider(
+                label="Node Frequency (absolute)",
+                min_value=sidebar_values["node_frequency_threshold_absolute"][0],
+                max_value=sidebar_values["node_frequency_threshold_absolute"][1],
+                key="node_freq_threshold_absolute",
+                help="Filter nodes based on absolute event counts.",
             )
 
         # Hook for additional node filters

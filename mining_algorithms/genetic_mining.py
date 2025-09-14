@@ -58,8 +58,9 @@ class GeneticMining(BaseMining):
 
         self.logger = get_logger("GeneticMining")
 
-    def generate_graph(self, spm_threshold, node_freq_threshold, population_size, max_generations, crossover_rate,
-                       mutation_rate, elitism_rate, tournament_size, power_value):
+    def generate_graph(self, spm_threshold, node_freq_threshold_normalized, node_freq_threshold_absolute,
+                       population_size, max_generations, crossover_rate, mutation_rate, elitism_rate, tournament_size,
+                       power_value):
         """
         Generate a process model graph using the genetic miner.
         This method runs the full pipeline:
@@ -69,8 +70,10 @@ class GeneticMining(BaseMining):
         ----------
         spm_threshold : float
             Threshold for SPM filtering.
-        node_freq_threshold : float
+        node_freq_threshold_normalized : float
             Threshold for normalized node frequency filtering.
+        node_freq_threshold_absolute : int
+            Threshold for absolute node frequency filtering.
         population_size : int
             Number of individuals per generation.
         max_generations : int
@@ -91,12 +94,7 @@ class GeneticMining(BaseMining):
         with GeneticMining._global_lock:
             GeneticMining._global_current_run_id = run_id
 
-        if st.session_state.get("cancel_run", False):
-            self.dependency_matrix = self.dependency_matrix_fallback
-            self.best_individual = self.best_individual_fallback
-            return
-
-        if self.spm_threshold == spm_threshold and self.node_freq_threshold == node_freq_threshold:
+        if st.session_state.get("rerun_genetic_miner", False):
             self.dependency_matrix_fallback = self.dependency_matrix
             self.dependency_matrix = {}
             self.best_individual_fallback = self.best_individual
@@ -105,15 +103,16 @@ class GeneticMining(BaseMining):
             self.end_measures = {}
 
         self.logger.debug(
-            f"[generate_graph] spm_threshold={spm_threshold}, node_freq_threshold={node_freq_threshold}, "
-            f"population_size={population_size}, max_generations={max_generations}, "
+            f"[generate_graph] spm_threshold={spm_threshold}, node_freq_threshold_normalized={node_freq_threshold_normalized}, "
+            f"node_freq_threshold_absolute={node_freq_threshold_absolute}, population_size={population_size}, max_generations={max_generations}, "
             f"crossover_rate={crossover_rate}, mutation_rate={mutation_rate}, "
             f"elitism_rate={elitism_rate}, tournament_size={tournament_size},"
             f"power_value={power_value}"
         )
 
         self.spm_threshold = spm_threshold
-        self.node_freq_threshold = node_freq_threshold
+        self.node_freq_threshold_normalized = node_freq_threshold_normalized
+        self.node_freq_threshold_absolute = node_freq_threshold_absolute
         self.population_size = population_size
         self.max_generations = max_generations
         self.crossover_rate = crossover_rate
@@ -182,7 +181,7 @@ class GeneticMining(BaseMining):
         for trace in self.log:
             # Add virtual start and end activities to each trace
             extended_trace = ['start'] + list(trace) + ['end']
-            idx = np.fromiter((activity_idx[x] for x in extended_trace), count=len(extended_trace),dtype=np.int32)
+            idx = np.fromiter((activity_idx[x] for x in extended_trace), count=len(extended_trace), dtype=np.int32)
 
             # follows and L1L
             if idx.size >= 2:

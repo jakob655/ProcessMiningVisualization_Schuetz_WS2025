@@ -11,11 +11,19 @@ class HeuristicMinerView(BaseAlgorithmView):
         st.write("### **Edge Filtering**")
 
         number_input_slider(
-            label="Edge Frequency",
-            min_value=sidebar_values["edge_frequency_threshold"][0],
-            max_value=sidebar_values["edge_frequency_threshold"][1],
-            key="edge_frequency_threshold",
-            help="Filter edges based on their frequency.",
+            label="Edge Frequency (normalized)",
+            min_value=sidebar_values["edge_frequency_threshold_normalized"][0],
+            max_value=sidebar_values["edge_frequency_threshold_normalized"][1],
+            key="edge_freq_threshold_normalized",
+            help="Filter edges based on normalized frequency (0–1).",
+        )
+
+        number_input_slider(
+            label="Edge Frequency (absolute)",
+            min_value=sidebar_values["edge_frequency_threshold_absolute"][0],
+            max_value=sidebar_values["edge_frequency_threshold_absolute"][1],
+            key="edge_freq_threshold_absolute",
+            help="Filter edges based on absolute frequency (event counts).",
         )
 
         number_input_slider(

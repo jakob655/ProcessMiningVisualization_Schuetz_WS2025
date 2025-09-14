@@ -69,19 +69,25 @@ The **SPM filter** simplifies process models by removing low-quality nodes based
 *For more information on the SPM metric, see: Marian Lux, Stefanie Rinderle-Ma, Andrei Preda: “Assessing the Quality of Search Process Models.”  
 Available online: https://ucrisportal.univie.ac.at/en/publications/assessing-the-quality-of-search-process-models*
 
-**Node frequency** measures how often each event (node) appears relative to the most frequent event in the log. It is calculated after the SPM filtering step. The value lies between 0.0 and 1.0 and helps assess how central a node is in terms of frequency.
+**Node frequency (normalized)**  
+Measures how often each event (node) appears relative to the most frequent node in the (SPM-filtered) log.  
+The result is a value between 0.0 and 1.0. Nodes with a normalized frequency below the threshold are removed.  
+
+**Node frequency (absolute)**  
+Counts the total number of occurrences of each event (node) in the log. Nodes with an absolute frequency below the threshold are removed.  
+
+*Both thresholds are synchronized: adjusting one automatically updates the other, so the normalized and absolute values always stay consistent.*
 
 The **traces threshold** describes the frequency of a trace in relation to the most frequent trace. It is calculated by dividing the frequency of a trace by the maximum frequency across all traces.
 
 ## Filtering
 
-Four metrics are used for filtering: the **SPM metric**, the **Node frequency**, the **Edge frequency** and the **traces threshold**.
+Three metrics are used for filtering: the **SPM metric**, the **Node frequency** and the **traces threshold**.
 
 The **SPM value** ranges from 0.0 to 1.0 and reflects the semantic quality of a node. It defines the threshold below which nodes are considered low-quality due to low frequency or high connectivity, and may be removed for abstraction before discovering cuts in the log.
 
-The **node frequency** value is in the range of 0.0 to 1.0. It filters out nodes that appear too rarely in the log. Nodes below this threshold are removed after the SPM filtering step.
-
-The **edge frequency** value is in the range of 0.0 to 1.0. It filters out edges that occur too rarely in the log. Edges below this threshold are removed after node filtering step.
+The **node frequency (normalized)** value is in the range of 0.0 to 1.0. It filters out nodes that appear too rarely in the log, relative to the most frequent node.  
+The **node frequency (absolute)** value is an integer count of event occurrences in the log. It filters out nodes below a chosen absolute frequency.
 
 The **traces threshold** is also in the range of 0.0 to 1.0. It removes traces that are less frequent than the selected threshold.
 

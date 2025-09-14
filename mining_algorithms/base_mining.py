@@ -1,6 +1,7 @@
 from collections import Counter
 
 import numpy as np
+import streamlit as st
 
 from logger import get_logger
 from logs.filters import filter_events
@@ -37,8 +38,10 @@ class BaseMining(MiningInterface):
 
         self._filter_state = {
             "spm_threshold": self.spm_threshold,
-            "node_freq_threshold": self.node_freq_threshold,
-            "edge_freq_threshold": self.edge_freq_threshold
+            "node_freq_threshold_normalized": self.node_freq_threshold_normalized,
+            "node_freq_threshold_absolute": self.node_freq_threshold_absolute,
+            "edge_freq_threshold_normalized": self.edge_freq_threshold_normalized,
+            "edge_freq_threshold_absolute": self.edge_freq_threshold_absolute
         }
 
         self.spm_filtered_events = self.get_spm_filtered_events()
@@ -75,6 +78,21 @@ class BaseMining(MiningInterface):
         self.filtered_events, self.filtered_appearance_freqs = self.__filter_out_all_events(
             self.node_frequency_filtered_log)
         self.logger.debug(f"Filtered Events: {self.filtered_events}")
+
+        self.node_freq_threshold_absolute = int(
+            round(max(self.filtered_appearance_freqs.values(), default=0) * self.node_freq_threshold_normalized))
+        if self.edge_absolute_counts:
+            self.edge_freq_threshold_absolute = int(
+                round(max(self.edge_absolute_counts.values(), default=0) * self.edge_freq_threshold_normalized))
+        else:
+            self.edge_freq_threshold_absolute = 0
+
+        self.edge_freq = self.filtered_succession_matrix.flatten()
+        self.edge_freq = np.unique(self.edge_freq[self.edge_freq >= 0.0])
+        if self.edge_freq.size == 0:
+            self.edge_freq_sorted, self.edge_freq_labels_sorted = [0.0], [1.0]
+        else:
+            self.edge_freq_sorted, self.edge_freq_labels_sorted = self.get_clusters(self.edge_freq)
 
         freq_values = list(self.filtered_appearance_freqs.values())
         if len(freq_values) <= 1 or max(freq_values) == min(freq_values):
@@ -147,6 +165,46 @@ class BaseMining(MiningInterface):
         ]
         return scale_factor
 
+    def get_edge_scale_factor(self, source, target):
+        """get the scale factor for an edge based on its frequency.
+        The scale factor is computed based on the frequency of the edge and the clustering of the frequencies.
+
+        Parameters
+        ----------
+        source : str
+            The source event of the edge connection for which the scale factor should be calculated
+        target : str
+            The target event of the edge connection for which the scale factor should be calculated
+        Returns
+        -------
+        float
+            The scale factor for the edge
+        """
+        scale_factor = self.edge_freq_labels_sorted[
+            self.edge_freq_sorted.index(self.filtered_succession_matrix[source][target])
+        ]
+        return scale_factor
+
+    def get_edge_scale_factor_abs_freq(self, abs_freq: float) -> float:
+        """get the scale factor for an edge on the absolute frequency of the edge.
+        The scale factor is computed based on the frequency of the edge and the clustering of the frequencies.
+
+        Parameters
+        ----------
+        abs_freq : float
+            The absolute frequency of the edge connection for which the scale factor should be calculated
+        Returns
+        -------
+        float
+            The scale factor for the edge
+        """
+        if abs_freq in self.edge_freq_sorted:
+            idx = self.edge_freq_sorted.index(abs_freq)
+        else:
+            idx = min(range(len(self.edge_freq_sorted)), key=lambda k: abs(abs_freq - self.edge_freq_sorted[k]))
+
+        return self.edge_freq_labels_sorted[idx]
+
     def _get_start_nodes(self) -> set[str]:
         """get all start nodes from the log. A start node is an event that is the first event in a trace.
 
@@ -200,7 +258,7 @@ class BaseMining(MiningInterface):
         return succession_matrix
 
     def get_events_to_remove(self, threshold: float) -> set[str]:
-        """get all events that have a frequency below a certain threshold. The threshold is a percentage of the maximum frequency of an event.
+        """get all filtered events that have a frequency below a certain threshold. The threshold is a percentage of the maximum frequency of an event.
 
         Parameters
         ----------
@@ -217,12 +275,12 @@ class BaseMining(MiningInterface):
         elif threshold < 0.0:
             threshold = 0.0
 
-        minimum_event_freq = round(max(self.appearance_frequency.values()) * threshold)
+        minimum_event_freq = round(max(self.filtered_appearance_freqs.values()) * threshold)
 
         return set(
             [
                 event
-                for event, freq in self.appearance_frequency.items()
+                for event, freq in self.filtered_appearance_freqs.items()
                 if freq < minimum_event_freq
             ]
         )
@@ -377,7 +435,7 @@ class BaseMining(MiningInterface):
 
         allowed_nodes = {
             node: freq for node, freq in normalized.items()
-            if freq >= self.node_freq_threshold
+            if freq >= self.node_freq_threshold_normalized
         }
 
         return allowed_nodes
@@ -413,15 +471,25 @@ class BaseMining(MiningInterface):
 
         return stats
 
-    def get_node_frequency_threshold(self):
-        """Get the current threshold used for the node frequency filter.
+    def get_node_frequency_threshold_normalized(self):
+        """Get the current normalized threshold used for the node frequency filter.
 
         Returns
         -------
         float
-            The node frequency.
+            The normalized node frequency.
         """
-        return self.node_freq_threshold
+        return self.node_freq_threshold_normalized
+
+    def get_node_frequency_threshold_absolute(self):
+        """Get the current absolute threshold used for the node frequency filter.
+
+        Returns
+        -------
+        float
+            The absolute node frequency.
+        """
+        return self.node_freq_threshold_absolute
 
     def get_edge_frequencies(self) -> dict:
         """
@@ -473,25 +541,37 @@ class BaseMining(MiningInterface):
             if self.filter_edge(a, b)
         ]
 
-    def get_edge_frequency_threshold(self):
-        """Get the current threshold used for the edge frequency filter.
+    def get_edge_frequency_threshold_normalized(self):
+        """Get the current normalized threshold used for the edge frequency filter.
 
         Returns
         -------
         float
-            The edge frequency.
+            The normalized edge frequency.
         """
-        return self.edge_freq_threshold
+        return self.edge_freq_threshold_normalized
+
+    def get_edge_frequency_threshold_absolute(self):
+        """Get the current absolute threshold used for the edge frequency filter.
+
+        Returns
+        -------
+        float
+            The absolute edge frequency.
+        """
+        return self.edge_freq_threshold_absolute
 
     def filter_edge(self, a: str, b: str) -> bool:
         """Return True if edge (a -> b) passes frequency threshold"""
-        return self.edge_frequencies.get((a, b), 0) >= self.edge_freq_threshold
+        return self.edge_frequencies.get((a, b), 0) >= self.edge_freq_threshold_normalized
 
     def _init_filter_thresholds(
             self,
             spm_threshold: float = 0.10,
-            node_freq_threshold: float = 0.25,
-            edge_freq_threshold: float = 0.25,
+            node_freq_threshold_normalized: float = 0.25,
+            node_freq_threshold_absolute: int = 1,
+            edge_freq_threshold_normalized: float = 0.25,
+            edge_freq_threshold_absolute: int = 1,
     ):
         """Initialize default thresholds for all filtering steps.
 
@@ -499,23 +579,31 @@ class BaseMining(MiningInterface):
         ----------
         spm_threshold : float, optional
             Minimum SPM value required to keep an event (default: 0.15).
-        node_freq_threshold : float, optional
-            Minimum normalized node frequency to keep an event (default: 0.30).
-        edge_freq_threshold : float, optional
-            Minimum normalized edge frequency to keep a directly-follows edge (default: 0.30).
+        node_freq_threshold_normalized : float, optional
+            Minimum normalized node frequency to keep an event (default: 0.25).
+        node_freq_threshold_absolute : int, optional
+            Minimum absolute node frequency to keep an event (default: 1).
+        edge_freq_threshold_normalized : float, optional
+            Minimum normalized edge frequency to keep a directly-follows edge (default: 0.25).
+        edge_freq_threshold_absolute : int, optional
+            Minimum absolute edge frequency to keep a directly-follows edge (default: 1).
 
         """
         self.spm_threshold = spm_threshold
-        self.node_freq_threshold = node_freq_threshold
-        self.edge_freq_threshold = edge_freq_threshold
+        self.node_freq_threshold_normalized = node_freq_threshold_normalized
+        self.node_freq_threshold_absolute = node_freq_threshold_absolute
+        self.edge_freq_threshold_normalized = edge_freq_threshold_normalized
+        self.edge_freq_threshold_absolute = edge_freq_threshold_absolute
 
     def recalculate_model_filters(self):
         """Recalculate all filtered events, logs, and frequencies based on current thresholds, if they have changed."""
 
         current_state = {
             "spm_threshold": self.spm_threshold,
-            "node_freq_threshold": self.node_freq_threshold,
-            "edge_freq_threshold": self.edge_freq_threshold
+            "node_freq_threshold_normalized": self.node_freq_threshold_normalized,
+            "node_freq_threshold_absolute": self.node_freq_threshold_absolute,
+            "edge_freq_threshold_normalized": self.edge_freq_threshold_normalized,
+            "edge_freq_threshold_absolute": self.edge_freq_threshold_absolute
         }
 
         if current_state == self._filter_state:
@@ -526,6 +614,9 @@ class BaseMining(MiningInterface):
         self.spm_filtered_events = self.get_spm_filtered_events()
         self.spm_filtered_log = filter_events(self.log, set(self.events) - set(
             self.spm_filtered_events))
+
+        self._sync_thresholds("node_freq_threshold_normalized", "node_freq_threshold_absolute",
+                              self.appearance_frequency)
 
         self.node_frequencies = self.get_node_frequencies()
         self.node_frequency_filtered_events = list(self.node_frequencies.keys())
@@ -544,6 +635,19 @@ class BaseMining(MiningInterface):
 
         self.filtered_events, self.filtered_appearance_freqs = self.__filter_out_all_events(
             self.node_frequency_filtered_log)
+
+        self._sync_thresholds("node_freq_threshold_normalized", "node_freq_threshold_absolute",
+                              self.filtered_appearance_freqs)
+        self._sync_thresholds("edge_freq_threshold_normalized", "edge_freq_threshold_absolute",
+                              self.edge_absolute_counts or {})
+
+        self.edge_freq = self.filtered_succession_matrix.flatten()
+        self.edge_freq = np.unique(self.edge_freq[self.edge_freq >= 0.0])
+        if self.edge_freq.size == 0:
+            self.edge_freq_sorted, self.edge_freq_labels_sorted = [0.0], [1.0]
+        else:
+            self.edge_freq_sorted, self.edge_freq_labels_sorted = self.get_clusters(self.edge_freq)
+
         if self.node_frequency_filtered_events:
             freq_values = list(self.filtered_appearance_freqs.values())
             if len(freq_values) <= 1 or max(freq_values) == min(freq_values):
@@ -551,3 +655,31 @@ class BaseMining(MiningInterface):
                 self.event_freq_sorted, self.event_freq_labels_sorted = freq_values, [0] * len(freq_values)
             else:
                 self.event_freq_sorted, self.event_freq_labels_sorted = self.get_clusters(freq_values)
+
+    def _sync_thresholds(self, norm_attr: str, abs_attr: str, freqs: dict[str, int]) -> None:
+        """Synchronize normalized and absolute thresholds bidirectionally, keeping them consistent also if max_val changes after filtering."""
+        max_val = max(freqs.values()) if freqs else 0
+
+        if max_val <= 0:
+            norm_val, abs_val = 0.0, 0
+        else:
+            # set current session values into valid ranges
+            abs_val = min(st.session_state.get(abs_attr, 0), max_val)
+            norm_val = min(max(st.session_state.get(norm_attr, 0.0), 0.0), 1.0)
+
+            # check which one was moved last
+            if st.session_state.get(f"last_{norm_attr}") != norm_val:
+                abs_val = int(round(norm_val * max_val))
+            elif st.session_state.get(f"last_{abs_attr}") != abs_val:
+                norm_val = (abs_val / max_val)
+            else:
+                # recompute normalized after max_val change
+                norm_val = (abs_val / max_val) if max_val > 0 else 0.0
+
+        st.session_state[abs_attr] = abs_val
+        st.session_state[norm_attr] = norm_val
+        st.session_state[f"last_{norm_attr}"] = norm_val
+        st.session_state[f"last_{abs_attr}"] = abs_val
+
+        setattr(self, norm_attr, norm_val)
+        setattr(self, abs_attr, abs_val)

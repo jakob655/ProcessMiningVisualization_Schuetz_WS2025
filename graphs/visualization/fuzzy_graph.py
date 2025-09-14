@@ -1,3 +1,5 @@
+import numpy as np
+
 from graphs.visualization.base_graph import BaseGraph
 
 
@@ -5,7 +7,7 @@ class FuzzyGraph(BaseGraph):
     """A class to represent a FuzzyGraph."""
 
     def __init__(
-        self,
+            self,
     ) -> None:
         """Initialize the FuzzyGraph object."""
         super().__init__(rankdir="TB")
@@ -36,13 +38,10 @@ class FuzzyGraph(BaseGraph):
         **event_data
             additional data for the event
         """
-        rounded_freq = None
-        if normalized_frequency:
-            rounded_freq = round(normalized_frequency, 2)
         event_data["SPM value"] = spm
-        event_data["Frequency/Unary Significance *(normalized)*"] = normalized_frequency
         event_data["Frequency *(absolute)*"] = absolute_frequency
-        label = f'<{title}<br/><font color="red">{rounded_freq:.2f}</font>>'
+        event_data["Frequency *(normalized)*/Unary Significance"] = normalized_frequency
+        label = f'<{title}<br/><font color="red">{absolute_frequency}</font>>'
         width, height = size
         super().add_node(
             id=title,
@@ -59,6 +58,7 @@ class FuzzyGraph(BaseGraph):
             self,
             source: str,
             destination: str,
+            size: float = 1,
             normalized_frequency: float = None,
             absolute_frequency: int = None,
             color: str = "black",
@@ -80,24 +80,25 @@ class FuzzyGraph(BaseGraph):
             normalized frequency of the edge
         absolute_frequency : float, optional
             absolute frequency of the edge
+        color : str, optional
+            color of the edge, by default "black"
         correlation: float, optional
             correlation of the edge
         significance: float, optional
             significance of the edge
-        color : str, optional
-            color of the edge, by default "black"
         **edge_data
             additional data for the edge
         """
-        if normalized_frequency:
-            normalized_frequency = round(normalized_frequency, 2)
-        edge_data["Frequency *(normalized)*"] = normalized_frequency
-        edge_data["Frequency *(absolute)*"] = absolute_frequency
+        avg = ""
+        if color == "red":
+            avg = "Average "
+        edge_data[avg + "Frequency *(absolute)*"] = absolute_frequency
+        edge_data[avg + "Frequency *(normalized)*"] = normalized_frequency
         if significance:
-            edge_data["Significance"] = round(significance, 2)
+            edge_data[avg + "Binary Significance"] = round(significance, 2)
         if correlation:
-            edge_data["Correlation"] = round(correlation, 2)
-        super().add_edge(source, destination, normalized_frequency, penwidth=str(normalized_frequency),
+            edge_data[avg + "Correlation"] = round(correlation, 2)
+        super().add_edge(source, destination, absolute_frequency, penwidth=str(size),
                          color=color,
                          data=edge_data)
 
@@ -122,8 +123,11 @@ class FuzzyGraph(BaseGraph):
         merged_nodes : list[dict[str, str | int | float]]
             list of dictionaries of nodes merged in the cluster
         """
-        cluster_data["significance"] = significance
-        cluster_data["nodes"] = merged_nodes
+        abs_freqs = [node.get("abs_freq", 0) for node in merged_nodes]
+        avg_abs_freq = round((np.mean(abs_freqs))) if abs_freqs else 0
+        cluster_data["Average Frequency *(normalized)*/Average Unary Significance"] = significance
+        cluster_data["Average Frequency *(absolute)*"] = avg_abs_freq
+        cluster_data["Nodes"] = merged_nodes
         width, height = size
         label = f"{cluster_name}\n{len(merged_nodes)} Elements\n~{significance}"
         super().add_node(
@@ -154,14 +158,15 @@ class FuzzyGraph(BaseGraph):
         node_id, description = super().node_to_string(id)
         node = self.get_node(id)
 
-        if nodes := node.get_data_from_key("nodes"):
-            sig_str = f"{node.get_data_from_key("significance"):.2f}"
-            description = f"\n**Significance:** {sig_str}"
+        if nodes := node.get_data_from_key("Nodes"):
+            sig_str = f"{node.get_data_from_key("Average Frequency *(normalized)*/Average Unary Significance"):.2f}"
+            description = f"\n**Average Frequency *(absolute)*:** {node.get_data_from_key("Average Frequency *(absolute)*")}"
+            description += f"\n**Average Frequency *(normalized)*/Average Unary Significance:** {sig_str}"
             description += "\n\n**Clustered Nodes:**"
             for n in nodes:
                 description += f"\n **{n['id']}**:\n"
                 description += f"- SPM value: {n.get('spm', '–'):.2f}\n"
-                description += f"- Frequency/Unary Significance *(normalized)*: {n['norm_freq']:.2f}\n"
                 description += f"- Frequency *(absolute)*: {n['abs_freq']}\n"
+                description += f"- Frequency *(normalized)*/Unary Significance: {n['norm_freq']:.2f}\n"
 
         return node_id, description

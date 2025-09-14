@@ -10,7 +10,7 @@ class GeneticMinerView(BaseAlgorithmView):
     def render_log_filter_extensions(self, sidebar_values: dict[str, any]) -> None:
         st.write("### **Genetic Mining**")
 
-        with st.expander("⚙️ **Settings:**", expanded=False):
+        with st.expander("⚙️ **Settings:**", expanded=True):
             number_input_slider(
                 label="Population Size",
                 min_value=sidebar_values["population_size"][0],
@@ -68,12 +68,8 @@ class GeneticMinerView(BaseAlgorithmView):
                 help="Odd number controlling sparsity of initial causal matrices. Dependency measures are raised to this power, so higher values create initial populations with less causal relations."
             )
 
-        col1, col2 = st.columns([1, 1])
-
-        with col1:
-            if st.button("Run Genetic Mining", type="secondary"):
-                st.session_state.rerun_genetic_miner = True
-
-        with col2:
-            if st.button("Cancel active Run", type="primary"):
-                st.session_state.cancel_run = True
+            col1, col2, col3 = st.columns([1, 5, 1])
+            with col2:
+                if st.button("Run Genetic Mining", type="primary"):
+                    st.session_state.rerun_genetic_miner = True
+                    st.rerun()

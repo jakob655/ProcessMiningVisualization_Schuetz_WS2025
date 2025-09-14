@@ -11,20 +11,27 @@ class HeuristicMining(BaseMining):
         self.logger = get_logger("HeuristicMining")
 
         self.dependency_matrix = {}
+        self.edge_freq = None
+        self.edge_freq_sorted = None
+        self.edge_freq_labels_sorted = None
 
         # Graph modifiers
         self.dependency_threshold = 0.5
+        self.min_edge_thickness = 2
 
     def generate_graph(
-            self, spm_threshold, node_freq_threshold, edge_freq_threshold, dependency_threshold):
+            self, spm_threshold, node_freq_threshold_normalized, node_freq_threshold_absolute,
+            edge_freq_threshold_normalized, edge_freq_threshold_absolute, dependency_threshold):
         self.graph = HeuristicGraph()
 
         self.start_nodes = self._get_start_nodes()
         self.end_nodes = self._get_end_nodes()
 
         self.spm_threshold = spm_threshold
-        self.node_freq_threshold = node_freq_threshold
-        self.edge_freq_threshold = edge_freq_threshold
+        self.node_freq_threshold_normalized = node_freq_threshold_normalized
+        self.node_freq_threshold_absolute = node_freq_threshold_absolute
+        self.edge_freq_threshold_normalized = edge_freq_threshold_normalized
+        self.edge_freq_threshold_absolute = edge_freq_threshold_absolute
         self.dependency_threshold = dependency_threshold
 
         self.recalculate_model_filters()
@@ -61,14 +68,6 @@ class HeuristicMining(BaseMining):
                 size=(w, h)
             )
 
-        # cluster the edge thickness sizes based on frequency
-        if self.dependency_matrix.any():
-            edge_frequencies = self.dependency_matrix.flatten()
-            edge_frequencies = np.unique(edge_frequencies[edge_frequencies >= 0.0])
-            edge_freq_sorted, edge_freq_labels_sorted = self.get_clusters(
-                edge_frequencies
-            )
-
         # add edges to graph
         for i in range(len(self.filtered_events)):
             column_total = 0.0
@@ -85,9 +84,7 @@ class HeuristicMining(BaseMining):
                 if dependency_graph[i][j] == 1.:
                     norm_frequency = edge_stats_map.get((source, target), {}).get("normalized_frequency", 0.0)
                     abs_frequency = edge_stats_map.get((source, target), {}).get("absolute_frequency", 0)
-                    edge_thickness = edge_freq_labels_sorted[
-                                         edge_freq_sorted.index(
-                                             self.dependency_matrix[i][j])] / 1.3
+                    edge_thickness = (self.get_edge_scale_factor(i, j) + self.min_edge_thickness)
                     dependency_score = float(self.dependency_matrix[i][j])
 
                     self.graph.create_edge(
@@ -127,38 +124,30 @@ class HeuristicMining(BaseMining):
 
     def __create_dependency_matrix(self):
         dependency_matrix = np.zeros(self.filtered_succession_matrix.shape)
-        y = 0
-        for row in self.filtered_succession_matrix:
-            x = 0
-            for _ in row:
-                if x == y:
-                    dependency_matrix[x][y] = self.filtered_succession_matrix[x][y] / (
-                                self.filtered_succession_matrix[x][y] + 1)
-                else:
-                    dependency_matrix[x][y] = (self.filtered_succession_matrix[x][y] -
-                                               self.filtered_succession_matrix[y][x]) / (
-                                                      self.filtered_succession_matrix[x][y] +
-                                                      self.filtered_succession_matrix[y][x] + 1)
-                x += 1
-            y += 1
+        np.fill_diagonal(dependency_matrix, 1.0)
+
+        non_diagonal_indices = np.where(dependency_matrix == 0)
+        diagonal_indices = np.diag_indices(dependency_matrix.shape[0])
+
+        dependency_matrix[diagonal_indices] = self.filtered_succession_matrix[diagonal_indices] / (
+                self.filtered_succession_matrix[diagonal_indices] + 1)
+
+        x, y = non_diagonal_indices
+
+        dependency_matrix[x, y] = ((self.filtered_succession_matrix[x, y] - self.filtered_succession_matrix[y, x]) / (
+                self.filtered_succession_matrix[x, y] + self.filtered_succession_matrix[y, x] + 1))
         return dependency_matrix
 
     def __create_dependency_graph(self, dependency_threshold):
         dependency_graph = np.zeros(self.dependency_matrix.shape)
-        y = 0
-        for row in dependency_graph:
-            for x in range(len(row)):
-                a = self.filtered_events[y]
-                b = self.filtered_events[x]
 
-                if (
-                        self.dependency_matrix[y][x] >= dependency_threshold and
-                        self.filter_edge(a, b)
-                ):
-                    if self.filtered_succession_matrix[y][x] == 0:
-                        continue
-                    dependency_graph[y][x] += 1
-            y += 1
+        filter_matrix = (self.filtered_succession_matrix > 0) & (
+                self.dependency_matrix >= dependency_threshold
+        )
+
+        for i, j in zip(*np.where(filter_matrix)):
+            if self.filter_edge(self.filtered_events[i], self.filtered_events[j]):
+                dependency_graph[i, j] = 1.0
 
         return dependency_graph
 

@@ -1,18 +1,20 @@
+from abc import ABC
+
 import streamlit as st
-from abc import abstractmethod, ABC
-from ui.base_ui.base_controller import BaseController
-from transformations.dataframe_transformations import DataframeTransformations
+
 from components.buttons import to_home
 from exceptions.graph_exceptions import InvalidNodeNameException, GraphException
 from exceptions.type_exceptions import TypeIsNoneException
 from logger import get_logger
+from transformations.dataframe_transformations import DataframeTransformations
+from ui.base_ui.base_controller import BaseController
 
 
 class BaseAlgorithmController(BaseController, ABC):
     """Base class for the algorithm controllers. It provides the basic methods for the algorithm controllers."""
 
     def __init__(
-        self, views=None, mining_model_class=None, dataframe_transformations=None
+            self, views=None, mining_model_class=None, dataframe_transformations=None
     ):
         """Initializes the controller for the algorithm views.
 
@@ -26,7 +28,8 @@ class BaseAlgorithmController(BaseController, ABC):
             The class for the dataframe transformations. If None is passed, a new instance is created, by default None
         """
         self.spm_threshold = None
-        self.node_frequency_threshold = None
+        self.node_freq_threshold_normalized = None
+        self.node_freq_threshold_absolute = None
         self.logger = get_logger("BaseAlgorithmController")
 
         self.mining_model = None
@@ -52,7 +55,8 @@ class BaseAlgorithmController(BaseController, ABC):
         """
         params = {
             "spm_threshold": self.spm_threshold,
-            "node_freq_threshold": self.node_frequency_threshold
+            "node_freq_threshold_normalized": self.node_freq_threshold_normalized,
+            "node_freq_threshold_absolute": self.node_freq_threshold_absolute
         }
         params.update(kwargs)
 
@@ -66,11 +70,14 @@ class BaseAlgorithmController(BaseController, ABC):
         """
         if "spm_threshold" not in st.session_state:
             st.session_state.spm_threshold = self.mining_model.get_spm_threshold()
-        if "node_frequency_threshold" not in st.session_state:
-            st.session_state.node_frequency_threshold = self.mining_model.get_node_frequency_threshold()
+        if "node_freq_threshold_normalized" not in st.session_state:
+            st.session_state.node_freq_threshold_normalized = self.mining_model.get_node_frequency_threshold_normalized()
+        if "node_freq_threshold_absolute" not in st.session_state:
+            st.session_state.node_freq_threshold_absolute = self.mining_model.get_node_frequency_threshold_absolute()
 
         self.spm_threshold = st.session_state.spm_threshold
-        self.node_frequency_threshold = st.session_state.node_frequency_threshold
+        self.node_freq_threshold_normalized = st.session_state.node_freq_threshold_normalized
+        self.node_freq_threshold_absolute = st.session_state.node_freq_threshold_absolute
 
     def have_parameters_changed(self) -> bool:
         """Checks if the shared algorithm parameters (node and edge filtering sliders)
@@ -83,7 +90,8 @@ class BaseAlgorithmController(BaseController, ABC):
         """
         return (
                 self.mining_model.get_spm_threshold() != self.spm_threshold or
-                self.mining_model.get_node_frequency_threshold() != self.node_frequency_threshold
+                self.mining_model.get_node_frequency_threshold_normalized() != self.node_freq_threshold_normalized or
+                self.mining_model.get_node_frequency_threshold_absolute() != self.node_freq_threshold_absolute
         )
 
     def get_sidebar_values(self) -> dict[str, tuple[float, float]]:
@@ -98,9 +106,13 @@ class BaseAlgorithmController(BaseController, ABC):
             A dictionary containing the min and max values for each shared sidebar slider.
             Keys must match the corresponding Streamlit session_state keys.
         """
+        max_abs_node = max(
+            self.mining_model.filtered_appearance_freqs.values()) if self.mining_model.filtered_appearance_freqs else 1
+
         return {
             "spm_threshold": (0.0, 1.0),
-            "node_frequency_threshold": (0.0, 1.0),
+            "node_frequency_threshold_normalized": (0.0, 1.0),
+            "node_frequency_threshold_absolute": (0, max_abs_node),
         }
 
     def is_correct_model_type(self, model) -> bool:
@@ -173,8 +185,8 @@ class BaseAlgorithmController(BaseController, ABC):
             self.mining_model = st.session_state.model
         else:
             if (
-                "df" not in st.session_state
-                or "selected_columns" not in st.session_state
+                    "df" not in st.session_state
+                    or "selected_columns" not in st.session_state
             ):
                 self.logger.error("DataFrame or selected columns are missing.")
                 self.logger.info("redirect to home page")
@@ -201,7 +213,6 @@ class BaseAlgorithmController(BaseController, ABC):
             The position of the algorithm in the sidebar.
         """
         self.process_algorithm_parameters()
-        view.display_sidebar(self.get_sidebar_values())
         view.display_back_button()
         view.display_export_button(disabled=True)
         if self.have_parameters_changed() or self.mining_model.get_graph() is None:
@@ -213,8 +224,8 @@ class BaseAlgorithmController(BaseController, ABC):
                     "Invalid node name. The string '___' is not allowed in node names."
                 )
                 st.session_state.error = (
-                    ex.message
-                    + "\n Please check the input data. The string '___' is not allowed in node names."
+                        ex.message
+                        + "\n Please check the input data. The string '___' is not allowed in node names."
                 )
                 to_home()
                 st.rerun()
@@ -226,5 +237,6 @@ class BaseAlgorithmController(BaseController, ABC):
                 st.warning(
                     "Do not change the parameters while mining. This will cause an error. Wait until the mining is finished."
                 )
+        view.display_sidebar(self.get_sidebar_values())
         view.display_graph(self.mining_model.get_graph())
         view.display_export_button(disabled=False)

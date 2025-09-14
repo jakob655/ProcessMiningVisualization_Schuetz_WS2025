@@ -74,15 +74,10 @@ class InductiveGraph(BaseGraph):
             additional data for the event
         """
         event_data["SPM value"] = spm
-        event_data["Frequency *(normalized)*"] = normalized_frequency
-
-        rounded_freq = None
-        if normalized_frequency:
-            rounded_freq = round(normalized_frequency, 2)
-        label = f'<{title}<br/><font color="red">{rounded_freq:.2f}</font>>'
-
-        width, height = self.node_sizes.get(title, (1.5, 0.5))
         event_data["Frequency *(absolute)*"] = self.event_frequency.get(title, 0)
+        event_data["Frequency *(normalized)*"] = normalized_frequency
+        label = f'<{title}<br/><font color="red">{self.event_frequency.get(title, 0)}</font>>'
+        width, height = self.node_sizes.get(title, (1.5, 0.5))
         super().add_node(
             id=title,
             label=label,

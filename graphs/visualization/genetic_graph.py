@@ -33,12 +33,9 @@ class GeneticGraph(BaseGraph):
             additional data for the event
         """
         event_data["SPM value"] = spm
-        event_data["Frequency *(normalized)*"] = normalized_frequency
         event_data["Frequency *(absolute)*"] = absolute_frequency
-        rounded_freq = None
-        if normalized_frequency:
-            rounded_freq = round(normalized_frequency, 2)
-        label = f'<{title}<br/><font color="red">{rounded_freq:.2f}</font>>'
+        event_data["Frequency *(normalized)*"] = normalized_frequency
+        label = f'<{title}<br/><font color="red">{absolute_frequency}</font>>'
         super().add_node(
             id=title,
             label=label,

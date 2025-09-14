@@ -85,7 +85,7 @@ class AlphaMining(BaseMining):
         return yl_set
 
     # Step 6
-    def generate_graph(self, spm_threshold, node_freq_threshold):
+    def generate_graph(self, spm_threshold, node_freq_threshold_normalized, node_freq_threshold_absolute):
         self.graph = AlphaGraph()
 
         self.graph.add_start_node()
@@ -93,7 +93,8 @@ class AlphaMining(BaseMining):
         self.graph.add_end_node()
 
         self.spm_threshold = spm_threshold
-        self.node_freq_threshold = node_freq_threshold
+        self.node_freq_threshold_normalized = node_freq_threshold_normalized
+        self.node_freq_threshold_absolute = node_freq_threshold_absolute
 
         self.recalculate_model_filters()
 
@@ -303,7 +304,8 @@ class AlphaMining(BaseMining):
 
     def generate_footprint(self):
         footprint = ["All transitions: {}".format(self.events),
-                     "Direct succession: {}".format(self.direct_succession_set), "Causality: {}".format(self.causality_set),
+                     "Direct succession: {}".format(self.direct_succession_set),
+                     "Causality: {}".format(self.causality_set),
                      "Parallel: {}".format(self.parallel_set), "Choice: {}".format(self.choice_set)]
         return '\n'.join(footprint)
 

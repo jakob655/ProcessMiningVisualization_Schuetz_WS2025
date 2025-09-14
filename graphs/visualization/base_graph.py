@@ -13,10 +13,10 @@ class Node:
     """Node class for the graph. Each node has an id, a label and a dictionary of data."""
 
     def __init__(
-        self,
-        id: str | int,
-        label: str = "",
-        data: dict[str, str | int | float] = None,
+            self,
+            id: str | int,
+            label: str = "",
+            data: dict[str, str | int | float] = None,
     ) -> None:
         """Initializes the Node object.
 
@@ -143,8 +143,8 @@ class BaseGraph:
     """
 
     def __init__(
-        self,
-        **graph_attributes,
+            self,
+            **graph_attributes,
     ) -> None:
         """Initializes the BaseGraph object.
 
@@ -165,11 +165,11 @@ class BaseGraph:
         self.colon_substitute: str = colon_substitute
 
     def add_node(
-        self,
-        id: str | int,
-        label: str = "",
-        data: dict[str, str | int | float] = None,
-        **node_attributes,
+            self,
+            id: str | int,
+            label: str = "",
+            data: dict[str, str | int | float] = None,
+            **node_attributes,
     ) -> None:
         """Adds a node to the graph. If the node id contains the colon, it is replaced with the colon substitute.
 
@@ -231,11 +231,11 @@ class BaseGraph:
         self.add_node(id, shape="doublecircle", style="filled, bold", fillcolor="red")
 
     def add_starting_edges(
-        self,
-        nodes: list[str | int],
-        starting_node: str = "Start",
-        weights: list[int] = None,
-        **edge_attributes,
+            self,
+            nodes: list[str | int],
+            starting_node: str = "Start",
+            weights: list[int] = None,
+            **edge_attributes,
     ) -> None:
         """Adds edges from the start node to the nodes in the list.
 
@@ -266,11 +266,11 @@ class BaseGraph:
                 self.add_edge(starting_node, node, weight=None, **edge_attributes)
 
     def add_ending_edges(
-        self,
-        nodes: list[str | int],
-        ending_node: str = "End",
-        weights: list[int] = None,
-        **edge_attributes,
+            self,
+            nodes: list[str | int],
+            ending_node: str = "End",
+            weights: list[int] = None,
+            **edge_attributes,
     ) -> None:
         """Adds edges from the nodes in the list to the end node.
 
@@ -296,32 +296,6 @@ class BaseGraph:
                 )
             else:
                 self.add_edge(node, ending_node, weight=None, **edge_attributes)
-
-    def compute_penwidth(self, edge_attributes: dict) -> str:
-        """Compute the penwidth for visualization.
-
-        This method enforces a minimum edge thickness and allows subclasses
-        to override the logic if algorithm-specific rules are required.
-
-        Parameters
-        ----------
-        edge_attributes : dict
-            The edge attributes passed to Graphviz.
-
-        Returns
-        -------
-        str
-            The computed penwidth as a string.
-        """
-        base_penwidth = 3.0
-        raw_penwidth = edge_attributes.get("penwidth", 0)
-
-        if raw_penwidth in (None, "", "None"):
-            custom_penwidth = 0.0
-        else:
-            custom_penwidth = float(raw_penwidth)
-
-        return str(base_penwidth + custom_penwidth)
 
     def add_edge(
             self,
@@ -367,8 +341,6 @@ class BaseGraph:
             label = ""
         else:
             label = str(weight)
-
-        edge_attributes["penwidth"] = self.compute_penwidth(edge_attributes)
 
         graphviz_source_id = self.substitiute_colons(edge.source)
         graphviz_target_id = self.substitiute_colons(edge.destination)

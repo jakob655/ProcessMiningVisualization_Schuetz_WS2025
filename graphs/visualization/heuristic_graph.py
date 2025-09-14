@@ -5,7 +5,7 @@ class HeuristicGraph(BaseGraph):
     """A class to represent a HeuristicGraph."""
 
     def __init__(
-        self,
+            self,
     ) -> None:
         """Initialize the HeuristicGraph object."""
         super().__init__(rankdir="TB")
@@ -37,12 +37,9 @@ class HeuristicGraph(BaseGraph):
             additional data for the event
         """
         event_data["SPM value"] = spm
-        event_data["Frequency *(normalized)*"] = normalized_frequency
         event_data["Frequency *(absolute)*"] = absolute_frequency
-        rounded_freq = None
-        if normalized_frequency:
-            rounded_freq = round(normalized_frequency, 2)
-        label = f'<{title}<br/><font color="red">{rounded_freq:.2f}</font>>'
+        event_data["Frequency *(normalized)*"] = normalized_frequency
+        label = f'<{title}<br/><font color="red">{absolute_frequency}</font>>'
         width, height = size
         super().add_node(
             id=title,
@@ -87,11 +84,8 @@ class HeuristicGraph(BaseGraph):
         **edge_data
             additional data for the edge
         """
-        rounded_freq = None
-        if normalized_frequency:
-            rounded_freq = round(normalized_frequency, 2)
-        edge_data["Frequency *(normalized)*"] = normalized_frequency
         edge_data["Frequency *(absolute)*"] = absolute_frequency
+        edge_data["Frequency *(normalized)*"] = normalized_frequency
         if dependency_score is not None:
             edge_data["Dependency score"] = round(dependency_score, 3)
-        super().add_edge(source, destination, rounded_freq, penwidth=str(size), color=color, data=edge_data)
+        super().add_edge(source, destination, absolute_frequency, penwidth=str(size), color=color, data=edge_data)

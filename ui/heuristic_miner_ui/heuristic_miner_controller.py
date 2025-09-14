@@ -1,14 +1,15 @@
+import streamlit as st
+
+from mining_algorithms.heuristic_mining import HeuristicMining
 from ui.base_algorithm_ui.base_algorithm_controller import BaseAlgorithmController
 from ui.heuristic_miner_ui.heuristic_miner_view import HeuristicMinerView
-import streamlit as st
-from mining_algorithms.heuristic_mining import HeuristicMining
 
 
 class HeuristicMinerController(BaseAlgorithmController):
     """Controller for the Heuristic Miner algorithm."""
 
     def __init__(
-        self, views=None, mining_model_class=None, dataframe_transformations=None
+            self, views=None, mining_model_class=None, dataframe_transformations=None
     ):
         """Initializes the controller for the Heuristic Miner algorithm.
 
@@ -22,7 +23,8 @@ class HeuristicMinerController(BaseAlgorithmController):
             The class for the dataframe transformations. If None is passed, a new instance is created, by default None
         """
         self.threshold = None
-        self.edge_frequency_threshold = None
+        self.edge_frequency_threshold_normalized = None
+        self.edge_frequency_threshold_absolute = None
 
         if views is None:
             views = [HeuristicMinerView()]
@@ -51,16 +53,23 @@ class HeuristicMinerController(BaseAlgorithmController):
         if "threshold" not in st.session_state:
             st.session_state.threshold = self.mining_model.get_threshold()
 
-        if "edge_frequency_threshold" not in st.session_state:
-            st.session_state.edge_frequency_threshold = self.mining_model.get_edge_frequency_threshold()
+        if "edge_freq_threshold_normalized" not in st.session_state:
+            st.session_state.edge_freq_threshold_normalized = self.mining_model.get_edge_frequency_threshold_normalized()
+
+        if "edge_freq_threshold_absolute" not in st.session_state:
+            st.session_state.edge_freq_threshold_absolute = self.mining_model.get_edge_frequency_threshold_absolute()
 
         # set instance variables from session state
         self.threshold = st.session_state.threshold
-        self.edge_frequency_threshold = st.session_state.edge_frequency_threshold
+        self.edge_frequency_threshold_normalized = st.session_state.edge_freq_threshold_normalized
+        self.edge_frequency_threshold_absolute = st.session_state.edge_freq_threshold_absolute
 
     def perform_mining(self) -> None:
-        """Performs the mining of the Heuristic Miner algorithm."""
-        super().perform_mining(dependency_threshold=self.threshold, edge_freq_threshold=self.edge_frequency_threshold)
+        super().perform_mining(
+            dependency_threshold=self.threshold,
+            edge_freq_threshold_normalized=self.edge_frequency_threshold_normalized,
+            edge_freq_threshold_absolute=self.edge_frequency_threshold_absolute,
+        )
 
     def have_parameters_changed(self) -> bool:
         """Checks if the algorithm parameters have changed.
@@ -73,7 +82,8 @@ class HeuristicMinerController(BaseAlgorithmController):
         return (
                 super().have_parameters_changed()
                 or self.mining_model.get_threshold() != self.threshold
-                or self.mining_model.get_edge_frequency_threshold() != self.edge_frequency_threshold
+                or self.mining_model.get_edge_frequency_threshold_normalized() != self.edge_frequency_threshold_normalized
+                or self.mining_model.get_edge_frequency_threshold_absolute() != self.edge_frequency_threshold_absolute
         )
 
     def get_sidebar_values(self) -> dict[str, tuple[int | float, int | float]]:
@@ -86,8 +96,11 @@ class HeuristicMinerController(BaseAlgorithmController):
             The keys of the dictionary are equal to the keys of the sliders.
         """
         sidebar_values = super().get_sidebar_values()
+        max_abs_edge = max(
+            self.mining_model.edge_absolute_counts.values()) if self.mining_model.edge_absolute_counts else 1
         sidebar_values.update({
             "threshold": (0.0, 1.0),
-            "edge_frequency_threshold": (0.0, 1.0),
+            "edge_frequency_threshold_normalized": (0.0, 1.0),
+            "edge_frequency_threshold_absolute": (0, max_abs_edge),
         })
         return sidebar_values

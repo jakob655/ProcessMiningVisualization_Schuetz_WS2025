@@ -94,7 +94,6 @@ class GeneticMinerController(BaseAlgorithmController):
 
         return (
                 st.session_state.get("rerun_genetic_miner", False)
-                or st.session_state.get("cancel_run", False)
                 or super().have_parameters_changed()
         )
 
@@ -128,4 +127,3 @@ class GeneticMinerController(BaseAlgorithmController):
 
         # Reset the rerun flag after run
         st.session_state.rerun_genetic_miner = False
-        st.session_state.cancel_run = False
