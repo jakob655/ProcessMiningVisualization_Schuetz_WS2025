@@ -22,7 +22,7 @@ else:
 
 
 def interactiveGraph(
-        graph: BaseGraph, onNodeClick, onEdgeClick, key="interactiveGraph", height=600
+        graph: BaseGraph, onClick, key="interactiveGraph", height=600
 ) -> None:
     state_name = f"previous_clickId-{key}"
 
@@ -44,10 +44,9 @@ def interactiveGraph(
 
         if component_value["type"] == "node":
             node_name, description = graph.node_to_string(component_value["nodeId"])
-            onNodeClick(node_name, description)
+            onClick(f"**Node: {node_name}**", description)
 
         elif component_value["type"] == "edge":
-            source = component_value.get("source", "")
-            target = component_value.get("target", "")
-            edge_description = graph.edge_to_string(source, target)
-            onEdgeClick(source, target, edge_description)
+            title, description = graph.edge_to_string(component_value.get("source", ""),
+                                                      component_value.get("target", ""))
+            onClick(f"**Edge: {title}**", description)

@@ -129,7 +129,7 @@ class FuzzyGraph(BaseGraph):
         cluster_data["Average Frequency *(absolute)*"] = avg_abs_freq
         cluster_data["Nodes"] = merged_nodes
         width, height = size
-        label = f"{cluster_name}\n{len(merged_nodes)} Elements\n~{significance}"
+        label = f"""<{cluster_name}<br/>{len(merged_nodes)} Elements<br/><font color="red">~{avg_abs_freq}</font>>"""
         super().add_node(
             id=cluster_name,
             label=label,

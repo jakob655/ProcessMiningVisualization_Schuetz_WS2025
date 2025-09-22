@@ -1,10 +1,8 @@
 import random
 import threading
 import uuid
-from collections import Counter
 
 import numpy as np
-import streamlit as st
 
 from graphs.visualization.genetic_graph import GeneticGraph
 from logger import get_logger
@@ -46,25 +44,23 @@ class GeneticMining(BaseMining):
         self.mutation_rate = 0.01
         self.elitism_rate = 0.01
         self.tournament_size = 5
-
         self.power_value = 1
-        self.dependency_matrix_fallback = {}
+        self.fitness_threshold = 1.0
+
         self.dependency_matrix = {}
+        self.best_individual = None
         self.start_measures = {}
         self.end_measures = {}
-
-        self.best_individual_fallback = None
-        self.best_individual = None
 
         self.logger = get_logger("GeneticMining")
 
     def generate_graph(self, spm_threshold, node_freq_threshold_normalized, node_freq_threshold_absolute,
                        population_size, max_generations, crossover_rate, mutation_rate, elitism_rate, tournament_size,
-                       power_value):
+                       power_value, fitness_threshold):
         """
         Generate a process model graph using the genetic miner.
         This method runs the full pipeline:
-            Dependency matrix initialization -> Genetic evolution -> Fitness evaluation -> Termination -> Filtering -> graph construction.
+            Dependency matrix initialization -> Genetic evolution -> Fitness evaluation -> Termination -> graph construction.
 
         Parameters
         ----------
@@ -88,19 +84,18 @@ class GeneticMining(BaseMining):
             Number of competitors in tournament selection.
         power_value : int
             Odd integer controlling rarity in initialization.
+        fitness_threshold : float
+            Minimum fitness value at which the heuristic individual creation stops early.
         """
         run_id = str(uuid.uuid4())
 
         with GeneticMining._global_lock:
             GeneticMining._global_current_run_id = run_id
 
-        if st.session_state.get("rerun_genetic_miner", False):
-            self.dependency_matrix_fallback = self.dependency_matrix
-            self.dependency_matrix = {}
-            self.best_individual_fallback = self.best_individual
-            self.best_individual = None
-            self.start_measures = {}
-            self.end_measures = {}
+        self.dependency_matrix = {}
+        self.best_individual = None
+        self.start_measures = {}
+        self.end_measures = {}
 
         self.logger.debug(
             f"[generate_graph] spm_threshold={spm_threshold}, node_freq_threshold_normalized={node_freq_threshold_normalized}, "
@@ -120,6 +115,7 @@ class GeneticMining(BaseMining):
         self.elitism_rate = elitism_rate
         self.tournament_size = tournament_size
         self.power_value = power_value
+        self.fitness_threshold = fitness_threshold
 
         self.recalculate_model_filters()
 
@@ -130,13 +126,10 @@ class GeneticMining(BaseMining):
             self.graph.create_edge("Start", "End")
             return
 
-        if not self.dependency_matrix:
-            self._initialize_dependency_matrix()
+        self._initialize_dependency_matrix()
 
-        if not self.best_individual:
-            self._run_genetic_miner(population_size, max_generations,
-                                    crossover_rate, mutation_rate,
-                                    elitism_rate, tournament_size, run_id, power_value)
+        self._run_genetic_miner(population_size, max_generations, crossover_rate, mutation_rate, elitism_rate,
+                                tournament_size, run_id, power_value, fitness_threshold)
 
         # Only generate if it's still an active run
         with GeneticMining._global_lock:
@@ -169,7 +162,7 @@ class GeneticMining(BaseMining):
         None
             Updates self.dependency_matrix, self.start_measures, and self.end_measures.
         """
-        all_activities = ['start'] + list(self.events) + ['end']
+        all_activities = ['start'] + list(self.filtered_events) + ['end']
         activity_idx = {a: i for i, a in enumerate(all_activities)}
         n = len(all_activities)
 
@@ -178,7 +171,7 @@ class GeneticMining(BaseMining):
         L2L = np.zeros((n, n), dtype=np.int32)
 
         # Count over all traces
-        for trace in self.log:
+        for trace in self.node_frequency_filtered_log:
             # Add virtual start and end activities to each trace
             extended_trace = ['start'] + list(trace) + ['end']
             idx = np.fromiter((activity_idx[x] for x in extended_trace), count=len(extended_trace), dtype=np.int32)
@@ -198,9 +191,9 @@ class GeneticMining(BaseMining):
         start, end = activity_idx['start'], activity_idx['end']
 
         # Initialize dependency matrix and start/end measures for all activity pairs
-        for a in self.events:
+        for a in self.filtered_events:
             idx_a = activity_idx[a]
-            for b in self.events:
+            for b in self.filtered_events:
                 idx_b = activity_idx[b]
                 if a != b:
                     l2l_ab = L2L[(idx_a, idx_b)]
@@ -240,7 +233,7 @@ class GeneticMining(BaseMining):
                 self.end_measures[a] = (f_ae - f_ea) / (f_ae + f_ea + 1.0)
 
     def _run_genetic_miner(self, population_size, max_generations, crossover_rate, mutation_rate, elitism_rate,
-                           tournament_size, run_id, power_value):
+                           tournament_size, run_id, power_value, fitness_threshold):
         """
         Execute the genetic algorithm loop to evolve process models.
 
@@ -262,6 +255,8 @@ class GeneticMining(BaseMining):
             Unique identifier to cancel/track runs.
         power_value : int
             Odd integer controlling rarity in initialization.
+        fitness_threshold : float
+            Minimum fitness value at which the heuristic individual creation stops early.
 
         Returns
         -------
@@ -271,27 +266,32 @@ class GeneticMining(BaseMining):
         best_so_far = -1.0
         generations = 0
         gen_limit = max_generations // 2
+        stop_early = False
 
         self.logger.debug(f"[GeneticMiner] Starting run_id={run_id}")
         elitism_count = max(1, int(population_size * elitism_rate))
 
         init_population = [
-            self._create_heuristic_individual(self.events, power_value) for _ in range(population_size)]
-        fitness_history = []
+            self._create_heuristic_individual(self.filtered_events, power_value) for _ in range(population_size)]
 
         for generation in range(max_generations):
             # Check if this run is still valid
             with GeneticMining._global_lock:
                 if GeneticMining._global_current_run_id != run_id:
                     self.logger.debug(f"[GeneticMiner] Cancelled run_id={run_id} during generation {generation}")
-                    return
+                    stop_early = True
+                    break
 
-            for ind in init_population:
-                ind['fitness'] = self._evaluate_fitness(ind)
-            init_population.sort(key=lambda x: -x['fitness'])
+            if generation == 0:
+                for ind in init_population:
+                    if self._check_and_update_best_individual(ind, fitness_threshold, generation):
+                        stop_early = True
+                        break
+                if stop_early:
+                    break
+                init_population.sort(key=lambda x: -x['fitness'])
 
             best_fitness = init_population[0]['fitness']
-            fitness_history.append(best_fitness)
 
             if best_fitness > best_so_far:
                 best_so_far = best_fitness
@@ -302,17 +302,13 @@ class GeneticMining(BaseMining):
             self.logger.debug(
                 f"Generation {generation}: fitness = {best_fitness:.4f}")
 
-            if best_fitness == 1.0:
-                self.logger.debug(f"[GeneticMiner] Optimal fitness reached in run_id={run_id}")
-                break
-
             if generations == gen_limit:
                 self.logger.debug(f"[GeneticMiner] Stopped due to stagnation ({generations} == {gen_limit})")
                 break
 
             next_gen = init_population[:elitism_count]
 
-            while len(next_gen) < population_size:
+            while len(next_gen) < population_size and not stop_early:
                 parent1 = self._tournament_selection(init_population, min(tournament_size, population_size))
                 parent2 = self._tournament_selection(init_population, min(tournament_size, population_size))
 
@@ -325,19 +321,60 @@ class GeneticMining(BaseMining):
                     self._mutate(child1, mutation_rate)
                     self._mutate(child2, mutation_rate)
 
+                # evaluate fitness
+                if self._check_and_update_best_individual(child1, fitness_threshold, generation):
+                    stop_early = True
+                    break
                 next_gen.append(child1)
+
                 if len(next_gen) < population_size:
+                    if self._check_and_update_best_individual(child2, fitness_threshold, generation):
+                        stop_early = True
+                        break
                     next_gen.append(child2)
 
-            init_population = next_gen
+            init_population = sorted(next_gen, key=lambda x: -x['fitness'])
 
-        self.best_individual = init_population[0]
+            if stop_early:
+                break
+
+        if not self.best_individual and init_population:
+            self.best_individual = init_population[0]
 
         self.logger.debug(f"[GeneticMiner] Completed run_id={run_id}")
         self.logger.debug(f"[FINAL CAUSAL MATRIX] C = {self.best_individual['C']}")
         self.logger.debug(f"[FINAL INDIVIDUAL] I = {self.best_individual['I']}")
         self.logger.debug(f"[FINAL INDIVIDUAL] O = {self.best_individual['O']}")
         self.logger.debug(f"[LOG TRACES] = {', '.join(str(trace) for trace in self.node_frequency_filtered_log)}")
+
+    def _check_and_update_best_individual(self, ind, fitness_threshold, generation):
+        """
+        Evaluate the fitness of an individual and check against the threshold.
+
+        - Update 'self.best_individual'.
+        - Return True to signal that evolution should stop.
+
+        Parameters
+        ----------
+        ind : dict
+            Individual to evaluate.
+        fitness_threshold : float
+            Minimum fitness value at which termination is triggered.
+        generation : int
+            Current generation index.
+
+        Returns
+        -------
+        bool
+            True if stop condition is met, False otherwise.
+        """
+        ind['fitness'] = self._evaluate_fitness(ind)
+        if ind['fitness'] >= fitness_threshold:
+            self.best_individual = ind
+            self.logger.debug(
+                f"[GeneticMiner] Stopped early: fitness {ind['fitness']:.4f} ≥ {fitness_threshold} (Generation: {generation})")
+            return True
+        return False
 
     @staticmethod
     def _tournament_selection(population, tournament_size):
@@ -377,7 +414,7 @@ class GeneticMining(BaseMining):
         self.graph.add_start_node()
         self.graph.add_end_node()
 
-        individual = self._get_filtered_individual()
+        individual = self.best_individual
         if not individual:
             self.logger.debug("[Graph] Skipped: no valid individual to render.")
             return
@@ -388,24 +425,21 @@ class GeneticMining(BaseMining):
 
         node_stats_map = {stat['node']: stat for stat in self.get_node_statistics()}
 
-        start_activities = []
-        end_activities = []
-
-        for act in activities:
-            if act in self.filtered_events:
-                # START activities
-                if self._is_start_activity(act, I):
-                    start_activities.append(act)
-
-                # END activities
-                if self._is_end_activity(act, O):
-                    end_activities.append(act)
+        start_activities = [a for a in activities if a in self.start_nodes]
+        end_activities = [a for a in activities if a in self.end_nodes]
 
         self.logger.debug(f"Start activities: {start_activities}")
         self.logger.debug(f"End activities: {end_activities}")
 
         for act in activities:
             if act not in self.filtered_events:
+                continue
+
+            # Skip isolated activities (no inputs, no outputs)
+            if (not I.get(act) or all(len(s) == 0 for s in I[act])) and (
+                    not O.get(act) or all(len(s) == 0 for s in O[act])) and not (
+                    act in self.start_nodes or act in self.end_nodes):
+                self.logger.debug(f"[Graph] Skipping isolated activity: {act}")
                 continue
 
             stats = node_stats_map.get(act, {})
@@ -417,103 +451,131 @@ class GeneticMining(BaseMining):
                 absolute_frequency=abs_freq
             )
 
-        created_places = set()
-        created_edges = set()
+        # Place & Edge creation
+        self.created_places = set()
+        self.created_edges = set()
 
         # Pre-calc covered relations for OR/AND
         covered_relations = set()
         for act in activities:
             if act not in self.filtered_events:
                 continue
-
             # Input
             for inp_set in I[act]:
                 if len(inp_set) > 1:
                     for pred in inp_set:
                         covered_relations.add((pred, act))
-
             # Output
             for out_set in O[act]:
                 if len(out_set) > 1:
                     for succ in out_set:
                         covered_relations.add((act, succ))
 
-        # Place & Edge creation
         for act in activities:
             if act not in self.filtered_events:
                 continue
 
-            # INPUT PLACES
-            for inp_set in I[act]:
-                if not inp_set:
-                    continue
-
-                # Skip if already covered
-                if len(inp_set) == 1:
-                    pred = next(iter(inp_set))
-                    if (pred, act) in covered_relations:
-                        continue
-
-                place_id = f"p_{'-'.join(sorted(inp_set))}_{act}"
-                if place_id not in created_places:
-                    self.graph.add_place(place_id)
-                    for pred in inp_set:
-                        edge = (pred, place_id)
-                        if edge not in created_edges:
-                            self.graph.create_edge(pred, place_id)
-                            created_edges.add(edge)
-                            self.logger.debug(f"[Graph] Edge: {pred} → {place_id}")
-                    created_places.add(place_id)
-
-                edge = (place_id, act)
-                if edge not in created_edges:
-                    self.graph.create_edge(place_id, act)
-                    created_edges.add(edge)
-                    self.logger.debug(f"[Graph] Edge: {place_id} → {act}")
-
             # OUTPUT PLACES
-            for out_set in O[act]:
-                if not out_set:
+            for out in O[act]:
+                if not out:
                     continue
 
-                # Skip if already covered
-                if len(out_set) == 1:
-                    succ = next(iter(out_set))
+                # If the output set contains the activity itself, split it:
+                if act in out:
+                    self._ensure_self_loop_place(act)
+                    rest = set(out) - {act}
+                    if rest:
+                        place_id = f"p_{act}_{'-'.join(sorted(rest))}"
+                        if place_id not in self.created_places:
+                            self.graph.add_place(place_id)
+                            self._safe_create_edge(act, place_id, self.created_edges)
+                            self.created_places.add(place_id)
+                        for succ in rest:
+                            self._safe_create_edge(place_id, succ, self.created_edges)
+                    continue
+
+                if len(out) == 1:
+                    succ = next(iter(out))
                     if (act, succ) in covered_relations:
                         continue
 
-                place_id = f"p_{act}_{'-'.join(sorted(out_set))}"
-                if place_id not in created_places:
+                place_id = f"p_{act}_{'-'.join(sorted(out))}"
+                if place_id not in self.created_places:
                     self.graph.add_place(place_id)
-                    edge = (act, place_id)
-                    if edge not in created_edges:
-                        self.graph.create_edge(act, place_id)
-                        created_edges.add(edge)
-                        self.logger.debug(f"[Graph] Edge: {act} → {place_id}")
-                    created_places.add(place_id)
+                    self._safe_create_edge(act, place_id, self.created_edges)
+                    self.created_places.add(place_id)
+                for succ in out:
+                    self._safe_create_edge(place_id, succ, self.created_edges)
 
-                for succ in out_set:
-                    edge = (place_id, succ)
-                    if edge not in created_edges:
-                        self.graph.create_edge(place_id, succ)
-                        created_edges.add(edge)
-                        self.logger.debug(f"[Graph] Edge: {place_id} → {succ}")
+            # INPUT PLACES
+            for inp in I[act]:
+                if not inp:
+                    continue
+
+                # If the input set contains the activity itself, split it:
+                if act in inp:
+                    self._ensure_self_loop_place(act)
+                    rest = set(inp) - {act}
+                    if rest:
+                        place_id = f"p_{'-'.join(sorted(rest))}_{act}"
+                        if place_id not in self.created_places:
+                            self.graph.add_place(place_id)
+                            for pred in rest:
+                                self._safe_create_edge(pred, place_id, self.created_edges)
+                                self.logger.debug(f"[Graph] Edge: {pred} → {place_id}")
+                            self.created_places.add(place_id)
+                        self._safe_create_edge(place_id, act, self.created_edges)
+                    continue
+
+                if len(inp) == 1:
+                    pred = next(iter(inp))
+                    if (pred, act) in covered_relations:
+                        continue
+
+                place_id = f"p_{'-'.join(sorted(inp))}_{act}"
+                if place_id not in self.created_places:
+                    self.graph.add_place(place_id)
+                    for pred in inp:
+                        self._safe_create_edge(pred, place_id, self.created_edges)
+                        self.logger.debug(f"[Graph] Edge: {pred} → {place_id}")
+                    self.created_places.add(place_id)
+                self._safe_create_edge(place_id, act, self.created_edges)
 
         place = f"p_start"
         self.graph.add_place(place)
-        self.graph.create_edge("Start", place)
+        self._safe_create_edge("Start", place, self.created_edges)
         for act in start_activities:
-            self.graph.create_edge(place, act)
+            self._safe_create_edge(place, act, self.created_edges)
             self.logger.debug(f"[Graph] Connected Start → {act} via {place}")
 
         place = f"p_end"
         self.graph.add_place(place)
         for act in end_activities:
-            self.graph.create_edge(act, place)
+            self._safe_create_edge(act, place, self.created_edges)
             self.logger.debug(f"[Graph] Connected {act} → End via {place}")
-        self.graph.create_edge(place, "End")
+        self._safe_create_edge(place, "End", self.created_edges)
 
         self.logger.debug("[Graph] Finished.")
+
+    def _ensure_self_loop_place(self, a: str):
+        place_id = f"p_self_{a}"
+        if place_id not in self.created_places:
+            self.graph.add_place(place_id)
+            self.created_places.add(place_id)
+        self._safe_create_edge(a, place_id, self.created_edges)
+        self._safe_create_edge(place_id, a, self.created_edges)
+        self.logger.debug(f"[Graph] Self-loop place ensured for {a}: {place_id}")
+        return place_id
+
+    def _safe_create_edge(self, source, target, created_edges):
+        if self.graph.contains_node(source) and self.graph.contains_node(target):
+            edge = (source, target)
+            if edge not in created_edges:
+                self.graph.create_edge(source, target)
+                created_edges.add(edge)
+                self.logger.debug(f"[Graph] Edge: {source} → {target}")
+        else:
+            self.logger.debug(f"[Graph] Skipped edge {source} → {target} (missing node)")
 
     def _create_heuristic_individual(self, activities, power_value):
         """
@@ -575,8 +637,7 @@ class GeneticMining(BaseMining):
         for a in activities:
             for out_set in O[a]:
                 for b in out_set:
-                    if a != b:
-                        C.add((a, b))
+                    C.add((a, b))
 
         return {'activities': activities, 'C': C, 'I': I, 'O': O}
 
@@ -635,27 +696,34 @@ class GeneticMining(BaseMining):
             parsed_sum += parsed
             completed_sum += 1 if completed else 0
 
-        return max(0.0, min(1.0, 0.40 * (parsed_sum / total_acts) + 0.60 * (completed_sum / total_traces)))
+        fitness = max(0.0, min(1.0, 0.40 * (parsed_sum / total_acts) + 0.60 * (completed_sum / total_traces)))
 
-    @staticmethod
-    def _parse_trace_token_game(individual, trace):
+        return fitness
+
+    def _parse_trace_token_game(self, individual, trace):
         """
-        Simulate parsing of a single trace using token-game semantics. (2.2 Parsing Semantics, Alves de Medeiros et al. (2005))
+        Simulate parsing of a single trace using token-game semantics.
 
         For each event in the trace:
         - INPUT semantics: an activity is enabled if all of its input sets are satisfied.
-            * A single input set is satisfied if at least one of its members currently holds a token (OR relation).
-            * All input sets must be satisfied together (AND across sets).
-        - When enabled, tokens are consumed from the satisfied input sets.
+            * A single input set is satisfied if one of its providers currently holds a token
+              (OR within a set, AND across sets).
+            * Providers may be direct predecessors (AND-tokens), OR-bags, or start events.
+        - When enabled, tokens are consumed from the chosen providers.
         - Tokens are produced to all OUTPUT sets.
-        - Empty INPUT sets denote start activities, empty OUTPUT sets denote end activities.
-        - Self-loops are handled explicitly: tokens remain on the same activity if it produces itself.
-        - A trace is considered complete if no tokens remain at the end.
-        
+            * A singleton output gives one token to the successor.
+            * A multi-output set creates an OR-bag, which can be used once.
+        - Self-loops are handled explicitly (tokens may remain on the same activity).
+        - A trace is considered complete if all tokens are consumed at the end. -> NEEDS TO BE FIXED
+
         Parameters
         ----------
         individual : dict
             Individual with activities, I/O sets, and C.
+            Must provide:
+                - 'activities' : list[str]
+                - 'I' : dict[str, list[set[str]]]  (input sets per activity)
+                - 'O' : dict[str, list[set[str]]]  (output sets per activity)
         trace : list[str]
             Event sequence to parse.
 
@@ -665,46 +733,127 @@ class GeneticMining(BaseMining):
             Number of parsed events and whether the trace completed properly.
         """
         I, O = individual['I'], individual['O']
-        marking = {a: 0 for a in individual['activities']}
+        activities = individual['activities']
+
+        # Precompute successor relations for faster lookup
+        direct_successors = {act: set() for act in activities}  # singleton outputs
+        or_output_groups = {act: [] for act in activities}  # multi-output OR groups
+        for act in activities:
+            for output_set in (O.get(act, []) or []):
+                if not output_set:
+                    continue
+                if len(output_set) == 1:
+                    direct_successors[act].add(next(iter(output_set)))
+                else:
+                    or_output_groups[act].append(tuple(sorted(output_set)))
+
+        # Token bookkeeping
+        tokens = {act: 0 for act in activities}
+        available_or_bags = set()
         parsed_count = 0
 
         for event in trace:
-            input_sets = I.get(event, [])
-            out_sets = O.get(event, [])
+            input_sets = I.get(event, []) or []
+            output_sets = O.get(event, []) or []
 
-            # Handle start events
-            if (not input_sets or set() in input_sets) and marking[event] == 0:
-                marking[event] = 1
+            # Skip floating outputs (no real effect, unless it is an end node)
+            has_real_outputs = any(out for out in output_sets if out)
+            if (not output_sets or not has_real_outputs) and (event not in self.end_nodes):
+                continue
 
+            # Skip floating inputs (isolated event, unless start node)
+            has_inputs = bool(input_sets)
+            all_inputs_empty = has_inputs and all(len(s) == 0 for s in input_sets)
+            if all_inputs_empty and (event not in self.start_nodes):
+                continue
+
+            # Track if event can fire
             can_execute = True
+            chosen_providers = []
+            start_self_available = (event in self.start_nodes)
 
-            # Check if input sets are satisfied
-            for input_set in input_sets:
-                if not input_set:
-                    break
-
-                if not any(marking.get(x, 0) > 0 for x in input_set if x != event):
+            # Check each input set (AND across sets)
+            if not input_sets:
+                if event not in self.start_nodes:
                     can_execute = False
+            else:
+                for input_set in input_sets:
+                    if not input_set:
+                        if event in self.start_nodes:
+                            chosen_providers.append(('none', None))
+                            continue
+                        else:
+                            can_execute = False
+                            break
 
-                # Consume tokens
-                for x in input_set:
-                    if marking[x] > 0:
-                        marking[x] -= 1
+                    provider = None
+
+                    # Direct predecessor
+                    for predecessor in input_set:
+                        if (event in direct_successors.get(predecessor, set())
+                                and tokens.get(predecessor, 0) > 0):
+                            provider = ('token', predecessor)
+                            break
+
+                    # OR-bag
+                    if provider is None:
+                        for predecessor in input_set:
+                            for group in or_output_groups.get(predecessor, []):
+                                if event in group and (predecessor, group) in available_or_bags:
+                                    provider = ('or', (predecessor, group))
+                                    break
+                            if provider:
+                                break
+
+                    # Start-self
+                    if provider is None and (event in input_set) and start_self_available:
+                        provider = ('start', event)
+                        start_self_available = False
+
+                    if provider is None:
+                        can_execute = False
+                        break
+                    chosen_providers.append(provider)
+
+            # Consume tokens if firing
+            for relation, provider_data in chosen_providers:
+                if relation == 'token':
+                    predecessor = provider_data
+                    tokens[predecessor] -= 1
+                elif relation == 'or':
+                    predecessor, group = provider_data
+                    if (predecessor, group) in available_or_bags:
+                        available_or_bags.remove((predecessor, group))
 
             if can_execute:
                 parsed_count += 1
 
-            if out_sets:
-                succ_counter = Counter(s for out_set in out_sets for s in out_set)
-                for succ, count in succ_counter.items():
-                    marking[succ] += count
+            # Produce outputs
+            for output_set in output_sets:
+                if not output_set:
+                    continue
+                if len(output_set) == 1:
+                    tokens[event] += 1
+                else:
+                    group = tuple(sorted(output_set))
+                    available_or_bags.add((event, group))
 
-            # Handle end events
-            has_self_loop = any({event} <= out_set for out_set in out_sets)
-            if not has_self_loop and (not out_sets or set() in out_sets) and marking[event] > 0:
-                marking[event] = 0
+        # TODO: Completion Workaround (needs refinement)
+        if parsed_count < len(trace):
+            is_completed = True
+        else:
+            is_completed = (
+                    all(v == 0 for v in tokens.values())
+                    and not available_or_bags
+            )
 
-        is_completed = all(v == 0 for v in marking.values())
+        has_self_loop = any(
+            any(act in output_set for output_set in O.get(act, []))
+            for act in activities
+        )
+        if has_self_loop and parsed_count == len(trace):
+            is_completed = False
+
         return parsed_count, is_completed
 
     def _crossover(self, parent1, parent2):
@@ -760,8 +909,8 @@ class GeneticMining(BaseMining):
             offspring2['O'][t] = self._resolve_overlaps(new_out2)
 
         # Ensure consistency
-        self._update_related_activities(offspring1)
-        self._update_related_activities(offspring2)
+        self._update_related_activities(offspring1, t)
+        self._update_related_activities(offspring2, t)
 
         return offspring1, offspring2
 
@@ -906,67 +1055,133 @@ class GeneticMining(BaseMining):
 
         return sets_list
 
-    @staticmethod
-    def _update_related_activities(individual):
+    def _update_related_activities(self, individual, t=None):
         """
-        Ensure INPUT and OUTPUT sets remain consistent.
+        Update I/O sets to keep them consistent.
 
-        Enforces:
-        - b in O(a) <=> a in I(b)
-        - Removes outdated links
+        Steps when t is given:
+        1. Collect all predecessors of t from I(t) and successors of t from O(t).
+        2. For every a != t:
+           - If a is in I(t) but O(a) does not contain t -> add t to O(a).
+           - If a is not in I(t) but O(a) contains t -> remove t from O(a).
+           - Remove duplicate appearances of t inside O(a).
+        3. For every b != t:
+           - If b is in O(t) but I(b) does not contain t -> add t to I(b).
+           - If b is not in O(t) but I(b) contains t -> remove t from I(b).
+           - Remove duplicate appearances of t inside I(b).
+        4. Remove any empty subsets created during the cleanup.
+        5. Rebuild C from the updated O sets.
+
+        Steps when t is None:
+        1. For each relation a->b in O:
+           - Ensure a is present in I(b).
+        2. For each relation a->b in I:
+           - Ensure b is present in O(a).
+        3. Remove any relations that are inconsistent (present only on one side).
+        4. Remove any empty subsets created during the cleanup.
+        5. Rebuild C from the updated O sets.
 
         Parameters
         ----------
         individual : dict
             Individual with activities, I/O sets, and C.
+        t : str or None
+            Specific activity to check after crossover/mutation. If None, check all.
 
         Returns
         -------
-        dict
-            Updated individual with consistent I/O sets.
+        None
+            Individual is modified in place.
         """
-        # forward -> reverse consistency
-        for a, out in list(individual['O'].items()):
-            for out_set in list(out):
-                for b in list(out_set):
-                    inp_b = individual['I'].setdefault(b, [set()])
-                    if not any(a in subset for subset in inp_b):
-                        empty = next((s for s in inp_b if not s), None)
-                        if empty is not None:
-                            empty.add(a)
-                        else:
-                            inp_b.append({a})
+        I, O, C = individual['I'], individual['O'], individual['C']
+        acts = individual['activities']
 
-        # reverse -> forward consistency
-        for b, inp in list(individual['I'].items()):
-            for inp_set in list(inp):
-                for a in list(inp_set):
-                    out_a = individual['O'].setdefault(a, [set()])
-                    if not any(b in subset for subset in out_a):
-                        empty = next((s for s in out_a if not s), None)
-                        if empty is not None:
-                            empty.add(b)
-                        else:
-                            out_a.append({b})
+        def prune(lst):
+            if lst:
+                lst[:] = [s for s in lst if s]
 
-        # remove inconsistencies
-        #  - If a not in I(b) then remove b from O(a)
-        #  - If b not in O(a) then remove a from I(b)
-        for a, out in list(individual['O'].items()):
-            for out_set in list(out):
-                for b in list(out_set):
-                    inp_b = individual['I'].get(b, [])
-                    if not any(a in subset for subset in inp_b):
-                        out_set.discard(b)
+        def add_to_random_subset(partitions, key, elem):
+            lst = partitions.setdefault(key, [])
+            for s in lst:
+                if elem in s:
+                    return
+            nonempty = [s for s in lst if s]
+            if nonempty:
+                random.choice(nonempty).add(elem)
+            else:
+                lst.append({elem})
 
-        for b, inp in list(individual['I'].items()):
-            for inp_set in list(inp):
-                for a in list(inp_set):
-                    out_a = individual['O'].get(a, [])
-                    if not any(b in subset for subset in out_a):
-                        inp_set.discard(a)
+        if t is not None:
+            preds = set().union(*(s for s in I.get(t, []) if s)) if I.get(t) else set()
+            succs = set().union(*(s for s in O.get(t, []) if s)) if O.get(t) else set()
 
-        return individual
+            # COLUMN repair: ensure all O(a) match I(t) (predecessors of t)
+            for a in acts:
+                if a == t:
+                    continue
+                want = a in preds
+                has = any(t in s for s in O.get(a, []))
+                if want and not has:
+                    add_to_random_subset(O, a, t)
+                elif not want and has:
+                    for s in O[a]:
+                        s.discard(t)
+                    prune(O[a])
+                # de-duplicate t across subsets
+                seen = False
+                for s in O.get(a, []):
+                    if t in s:
+                        if seen:
+                            s.discard(t)
+                        seen = True
+                prune(O.get(a, []))
+
+            # ROW repair: ensure all I(b) match O(t) (successors of t)
+            for b in acts:
+                if b == t:
+                    continue
+                want = b in succs
+                has = any(t in s for s in I.get(b, []))
+                if want and not has:
+                    add_to_random_subset(I, b, t)
+                elif not want and has:
+                    for s in I[b]:
+                        s.discard(t)
+                    prune(I[b])
+                # de-duplicate t across subsets
+                seen = False
+                for s in I.get(b, []):
+                    if t in s:
+                        if seen:
+                            s.discard(t)
+                        seen = True
+                prune(I.get(b, []))
+
+        else:
+            # forward -> reverse
+            for a, outs in O.items():
+                for out in outs:
+                    for b in list(out):
+                        if all(a not in s for s in I.get(b, [])):
+                            add_to_random_subset(I, b, a)
+            # reverse -> forward
+            for b, ins in I.items():
+                for inn in ins:
+                    for a in list(inn):
+                        if all(b not in s for s in O.get(a, [])):
+                            add_to_random_subset(O, a, b)
+            # remove inconsistencies
+            for a, outs in O.items():
+                for out in outs:
+                    out.difference_update({b for b in out if all(a not in s for s in I.get(b, []))})
+                prune(outs)
+            for b, ins in I.items():
+                for inn in ins:
+                    inn.difference_update({a for a in inn if all(b not in s for s in O.get(a, []))})
+                prune(ins)
+
+        # rebuild C from O
+        self._rebuild_causal_relations(individual)
 
     @staticmethod
     def _rebuild_causal_relations(individual):
@@ -987,80 +1202,8 @@ class GeneticMining(BaseMining):
         for a in individual['activities']:
             for out_set in individual['O'][a]:
                 for b in out_set:
-                    if a != b:
                         C.add((a, b))
         individual['C'] = C
-
-    @staticmethod
-    def _is_start_activity(act, I):
-        """
-        Check whether an activity is a start activity.
-
-        Returns
-        -------
-        bool
-            True if start activity, False otherwise.
-        """
-        inp = I.get(act, None)
-        if not inp:
-            return False
-        return any(len(subset) == 0 for subset in inp)
-
-    @staticmethod
-    def _is_end_activity(act, O):
-        """
-        Check whether an activity is an end activity.
-
-        Returns
-        -------
-        bool
-            True if end activity, False otherwise.
-        """
-        out = O.get(act, None)
-        if not out:
-            return False
-        return any(len(subset) == 0 for subset in out)
-
-    def _get_filtered_individual(self):
-        """
-        Return best individual restricted to currently filtered events.
-
-        Filters out any I/O subsets containing removed events and
-        inserts empty sets if needed to preserve start/end semantics.
-
-        Returns
-        -------
-        dict | None
-            Filtered individual or None if unavailable.
-        """
-        if not self.best_individual:
-            return None
-
-        activities = [a for a in self.best_individual['activities'] if a in self.filtered_events]
-
-        C = set((a, b) for (a, b) in self.best_individual['C']
-                if a in self.filtered_events and b in self.filtered_events)
-
-        I = {}
-        O = {}
-
-        for a in activities:
-            raw_I = self.best_individual['I'].get(a, [])
-            I[a] = [inp for inp in raw_I if all(event in self.filtered_events for event in inp)]
-            if not I[a]:
-                I[a] = [set()]
-
-            raw_O = self.best_individual['O'].get(a, [])
-            O[a] = [out for out in raw_O if all(event in self.filtered_events for event in out)]
-            if not O[a]:
-                O[a] = [set()]
-
-        return {
-            'activities': activities,
-            'C': C,
-            'I': I,
-            'O': O
-        }
 
     def get_population_size(self):
         return self.population_size

@@ -11,18 +11,18 @@ class GeneticMinerView(BaseAlgorithmView):
         st.write("### **Genetic Mining**")
 
         with st.expander("⚙️ **Settings:**", expanded=True):
-            number_input_slider(
+            st.number_input(
                 label="Population Size",
-                min_value=sidebar_values["population_size"][0],
-                max_value=sidebar_values["population_size"][1],
+                min_value=1,
+                step=1,
                 key="population_size",
                 help="Number of candidate models (individuals) in each generation. Larger populations improve diversity and search coverage, but increase runtime cost.",
             )
 
-            number_input_slider(
+            st.number_input(
                 label="Max Generations",
-                min_value=sidebar_values["max_generations"][0],
-                max_value=sidebar_values["max_generations"][1],
+                min_value=1,
+                step=1,
                 key="max_generations",
                 help="Maximum number of generations to run. The run may terminate earlier if optimal fitness is reached or the fitness stagnates.",
             )
@@ -66,6 +66,14 @@ class GeneticMinerView(BaseAlgorithmView):
                 step=2,
                 key="power_value",
                 help="Odd number controlling sparsity of initial causal matrices. Dependency measures are raised to this power, so higher values create initial populations with less causal relations."
+            )
+
+            st.slider(
+                label="Fitness Threshold",
+                min_value=sidebar_values["fitness_threshold"][0],
+                max_value=sidebar_values["fitness_threshold"][1],
+                key="fitness_threshold",
+                help="Stop early if an individual reaches this fitness value. 1.0 = perfect fit."
             )
 
             col1, col2, col3 = st.columns([1, 5, 1])

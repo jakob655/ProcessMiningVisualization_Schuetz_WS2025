@@ -124,8 +124,7 @@ class BaseAlgorithmView(BaseView):
             if graph is not None:
                 interactiveGraph(
                     graph,
-                    onNodeClick=self.display_node_info,
-                    onEdgeClick=self.display_edge_info,
+                    onClick=self.display_element_info,
                     height=self.graph_height,
                 )
 
@@ -143,36 +142,19 @@ class BaseAlgorithmView(BaseView):
             with st.spinner(message):
                 operation()
 
-    def display_node_info(self, node_name: str, node_description: str) -> None:
-        """Displays the information of a node in the node data container.
+    def display_element_info(self, title: str, description: str) -> None:
+        """Displays the information of a node or edge in the node data container.
 
         Parameters
         ----------
-        node_name : str
-            The name of the node.
-        node_description : str
-            The description of the node.
-        """
-        with self.node_data_container:
-            with st.expander(f"Node: {node_name}"):
-                for line in node_description.split("\n"):
-                    st.write(line)
-
-    def display_edge_info(self, source: str, target: str, description: str) -> None:
-        """Displays the information of an edge in the node data container.
-
-        Parameters
-        ----------
-        source : str
-            The source node of the edge.
-        target : str
-            The target node of the edge.
+        title : str
+            The name of the node or edge.
         description : str
-            The description of the edge.
+            The description of the node or edge.
         """
         with self.node_data_container:
-            with st.expander(f"Edge: {source} -> {target}"):
-                for line in description[-1].split("\n"):
+            with st.expander(title):
+                for line in description.split("\n"):
                     st.write(line)
 
     def display_page_title(self, title: str) -> None:

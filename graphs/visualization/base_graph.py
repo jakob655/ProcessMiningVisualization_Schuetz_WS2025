@@ -526,7 +526,7 @@ class BaseGraph:
             The edge name and a description containing weight and stored edge_data.
         """
         edge = self.get_edge(source, destination)
-        name = f"{edge.source}->{edge.destination}"
+        name = f"{edge.source} -> {edge.destination}"
         description = ""
         if edge.get_data():
             for key, value in edge.get_data().items():

@@ -11,9 +11,6 @@ class HeuristicMining(BaseMining):
         self.logger = get_logger("HeuristicMining")
 
         self.dependency_matrix = {}
-        self.edge_freq = None
-        self.edge_freq_sorted = None
-        self.edge_freq_labels_sorted = None
 
         # Graph modifiers
         self.dependency_threshold = 0.5

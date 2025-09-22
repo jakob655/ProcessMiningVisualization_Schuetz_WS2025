@@ -2,7 +2,7 @@ from graphs.cuts import exclusive_cut, parallel_cut, sequence_cut, loop_cut
 from graphs.dfg import DFG
 from graphs.visualization.inductive_graph import InductiveGraph
 from logger import get_logger
-from logs.filters import filter_events, filter_traces
+from logs.filters import filter_traces
 from logs.splits import (
     exclusive_split,
     parallel_split,
@@ -65,7 +65,6 @@ class InductiveMining(BaseMining):
         min_traces_frequency = self.calculate_minimum_traces_frequency(traces_threshold)
 
         filtered_log = filter_traces(self.node_frequency_filtered_log, min_traces_frequency)
-        filtered_log = filter_events(filtered_log, events_to_remove)
 
         self.filtered_log = filtered_log
 

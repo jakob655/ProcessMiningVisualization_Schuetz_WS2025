@@ -49,7 +49,7 @@ class HeuristicGraph(BaseGraph):
             height=str(height),
             shape="box",
             style="rounded, filled",
-            fillcolor="#FFFFFF",
+            fillcolor="#FDFFF5",
         )
 
     def create_edge(

@@ -224,8 +224,7 @@ class BaseAlgorithmController(BaseController, ABC):
                     "Invalid node name. The string '___' is not allowed in node names."
                 )
                 st.session_state.error = (
-                        ex.message
-                        + "\n Please check the input data. The string '___' is not allowed in node names."
+                        ex.message + "\n Please check the input data. The string '___' is not allowed in node names."
                 )
                 to_home()
                 st.rerun()

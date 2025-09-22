@@ -267,7 +267,7 @@ class FuzzyMining(BaseMining):
                 # check if removes by Rule 3 low sign and low correlation
 
                 # additional edge frequency threshold check
-                edge_freq = self.edge_frequencies.get((self.filtered_events[i], self.filtered_events[j]), 0.0)
+                edge_freq = self.normalized_edge_frequencies.get((self.filtered_events[i], self.filtered_events[j]), 0.0)
                 if edge_freq < self.edge_freq_threshold_normalized:
                     continue
 
@@ -451,7 +451,7 @@ class FuzzyMining(BaseMining):
             return [cluster], cluster
 
     def __get_binary_significance(self, src: str, tgt: str) -> float:
-        freq = self.edge_frequencies.get((src, tgt), 0.0)
+        freq = self.normalized_edge_frequencies.get((src, tgt), 0.0)
         if freq == 0.0:
             return 0.0
 
@@ -934,7 +934,7 @@ class FuzzyMining(BaseMining):
         Utility filtering is based on removed_edges list.
         Frequency filtering is based on normalized edge frequency threshold.
         """
-        frequency = self.edge_frequencies.get((a, b), 0.0)
+        frequency = self.normalized_edge_frequencies.get((a, b), 0.0)
 
         if frequency < self.edge_freq_threshold_normalized:
             self.logger.debug(f"Filtering edge {a} -> {b}, frequency={frequency} => passed: False (below threshold)")

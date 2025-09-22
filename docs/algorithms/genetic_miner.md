@@ -39,7 +39,6 @@ Unlike local search-based miners (e.g., Alpha, Heuristic, Inductive), the Geneti
   - `p=1`: dense initialization (many relations kept).  
   - Higher odd values (e.g. 5, 7, 9): sparse initialization (only strong relations survive).
 
-
 2. ### **Genetic Evolution**
 - The population of individuals is evolved across generations, using GA operators:
   - **Fitness Evaluation**  
@@ -75,15 +74,14 @@ Unlike local search-based miners (e.g., Alpha, Heuristic, Inductive), the Geneti
     - After mutation, enforce consistency between INPUT and OUTPUT sets.
   - **Generation Loop**  
     - Start with elite individuals.  
-    - Fill the rest of the population with children produced by crossover and mutation.  
-    - Continue until the new generation reaches the defined population size.  
+    - Fill the rest of the population with children produced by crossover and mutation.
     - Track best fitness.
-
 
 3. ### **Termination**
 - The genetic algorithm stops when one of the following conditions is met:
-  - **Optimal fitness**:  
-    - If the best individual in the population reaches `fitness = 1.0` (perfect parsing of all traces), evolution halts early.
+  - **Fitness threshold (configurable):**  
+    - Immediate stop as soon as any individual reaches `fitness ≥ fitness_threshold` (checked already in generation 0 and during offspring creation).
+    - **Optimal fitness (default)**: `fitness = 1.00`
   - **Generation limit**:  
     - If the number of iterations reaches `max_generations`, the algorithm terminates regardless of fitness.
   - **Stagnation**:  
@@ -97,23 +95,26 @@ Unlike local search-based miners (e.g., Alpha, Heuristic, Inductive), the Geneti
 - After termination, the fittest individual is translated into a **Petri-net–like graph** for visualization.
   - **Steps**:
     - **Start and End Nodes**  
-      - Virtual `Start` and `End` nodes are added.  
-      - All detected start activities are connected to `Start`.  
-      - All detected end activities are connected to `End`.
+      - `Start` and `End` nodes are added.  
+      - `Start activities` connect via an intermediate place `p_start`.
+      - `End activities` connect via an intermediate place `p_end`.
     - **Activity Nodes**  
       - Each activity that passes filtering is added as an event node, annotated with:  
         - Normalized frequency  
         - Absolute frequency  
         - SPM quality score
+      - Activities with no inputs, no outputs, and not marked as start/end are skipped.
     - **Input Places (joins)**  
       - For each activity, an intermediate place node is created for every INPUT set.  
       - Edges are drawn from each predecessor in the INPUT set to the place, and from the place to the activity.  
       - This models AND/OR joins.
+      - If an input set contains the activity itself, a **dedicated self-loop place** is created.
     - **Output Places (splits)**  
       - For each activity, an intermediate place node is created for every OUTPUT set.  
       - Edges are drawn from the activity to the place, and from the place to each successor in the OUTPUT set.  
       - This models AND/OR splits.
-    - **Overlap Handling**  
+      - If an output set contains the activity itself, a **dedicated self-loop place** is created.
+    - **Overlap Handling**
       - To avoid redundancy, single-predecessor relations that are already covered by a larger OR/AND set are skipped.
   - **Consistency**  
     - Before rendering, causal relations `C` are rebuilt from the OUTPUT sets to ensure the graph reflects the most recent state of the model.

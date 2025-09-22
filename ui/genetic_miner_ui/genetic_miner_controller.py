@@ -1,5 +1,7 @@
 import streamlit as st
 
+from components.buttons import to_home
+from exceptions.graph_exceptions import InvalidNodeNameException, GraphException
 from mining_algorithms.genetic_mining import GeneticMining
 from ui.base_algorithm_ui.base_algorithm_controller import BaseAlgorithmController
 from ui.genetic_miner_ui.genetic_miner_view import GeneticMinerView
@@ -27,6 +29,7 @@ class GeneticMinerController(BaseAlgorithmController):
         self.elitism_rate = None
         self.tournament_size = None
         self.power_value = None
+        self.fitness_threshold = None
 
         if views is None:
             views = [GeneticMinerView()]
@@ -74,6 +77,9 @@ class GeneticMinerController(BaseAlgorithmController):
         if "power_value" not in st.session_state:
             st.session_state.power_value = self.mining_model.get_power_value()
 
+        if "fitness_threshold" not in st.session_state:
+            st.session_state.fitness_threshold = self.mining_model.fitness_threshold
+
         # set instance variables from session state
         self.population_size = st.session_state.population_size
         self.max_generations = st.session_state.max_generations
@@ -82,6 +88,7 @@ class GeneticMinerController(BaseAlgorithmController):
         self.elitism_rate = st.session_state.elitism_rate
         self.tournament_size = st.session_state.tournament_size
         self.power_value = st.session_state.power_value
+        self.fitness_threshold = st.session_state.fitness_threshold
 
     def have_parameters_changed(self) -> bool:
         """Checks if the algorithm parameters have changed.
@@ -108,13 +115,12 @@ class GeneticMinerController(BaseAlgorithmController):
         """
         sidebar_values = super().get_sidebar_values()
         sidebar_values.update({
-            "population_size": (10, 500),
-            "max_generations": (10, 1000),
             "crossover_rate": (0.0, 1.0),
             "mutation_rate": (0.0, 0.99),
             "elitism_rate": (0.0, 0.99),
             "tournament_size": (2, min(20, self.population_size)),
             "power_value": (1, 9),
+            "fitness_threshold": (0.0, 1.0),
         })
         return sidebar_values
 
@@ -123,7 +129,51 @@ class GeneticMinerController(BaseAlgorithmController):
         super().perform_mining(population_size=self.population_size, max_generations=self.max_generations,
                                crossover_rate=self.crossover_rate, mutation_rate=self.mutation_rate,
                                elitism_rate=self.elitism_rate, tournament_size=self.tournament_size,
-                               power_value=self.power_value)
+                               power_value=self.power_value, fitness_threshold=self.fitness_threshold)
 
         # Reset the rerun flag after run
         st.session_state.rerun_genetic_miner = False
+
+    def run(self, view, pos):
+        """Runs the genetic algorithm controller.
+
+        Parameters
+        ----------
+        view : BaseAlgorithmView
+            The view for the algorithm.
+        pos : int
+            The position of the algorithm in the sidebar.
+        """
+        self.process_algorithm_parameters()
+        view.display_back_button()
+        view.display_export_button(disabled=True)
+        if st.session_state.get("rerun_genetic_miner", False) or self.have_parameters_changed():
+            try:
+                view.display_loading_spinner("Mining...", self.perform_mining)
+            except InvalidNodeNameException as ex:
+                self.logger.exception(ex)
+                self.logger.error(
+                    "Invalid node name. The string '___' is not allowed in node names."
+                )
+                st.session_state.error = (
+                        ex.message
+                        + "\n Please check the input data. The string '___' is not allowed in node names."
+                )
+                to_home()
+                st.rerun()
+            except GraphException as ex:
+                self.logger.exception(ex)
+                self.logger.warning(
+                    "Graph could not be created. Wait until the mining is finished before changing parameters."
+                )
+                st.warning(
+                    "Do not change the parameters while mining. This will cause an error. Wait until the mining is finished."
+                )
+        view.display_sidebar(self.get_sidebar_values())
+        if self.mining_model.get_graph() is None:
+            st.info(
+                "Please adjust the **Genetic Mining settings** in the sidebar first, and then start the algorithm, by tuning the **Log Filters**, or by clicking the **Run Genetic Mining** button."
+            )
+        else:
+            view.display_graph(self.mining_model.get_graph())
+        view.display_export_button(disabled=False)

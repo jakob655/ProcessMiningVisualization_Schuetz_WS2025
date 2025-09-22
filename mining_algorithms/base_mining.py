@@ -61,7 +61,7 @@ class BaseMining(MiningInterface):
 
         self.edge_absolute_counts = None
 
-        self.edge_frequencies = self.get_edge_frequencies()
+        self.normalized_edge_frequencies = self.get_normalized_edge_frequencies()
 
         self.start_nodes = self._get_start_nodes()
         self.end_nodes = self._get_end_nodes()
@@ -86,6 +86,19 @@ class BaseMining(MiningInterface):
                 round(max(self.edge_absolute_counts.values(), default=0) * self.edge_freq_threshold_normalized))
         else:
             self.edge_freq_threshold_absolute = 0
+
+        # Session-state-initialization for thresholds
+        for norm_attr, abs_attr in [
+            ("node_freq_threshold_normalized", "node_freq_threshold_absolute"),
+            ("edge_freq_threshold_normalized", "edge_freq_threshold_absolute"),
+        ]:
+            norm_val = getattr(self, norm_attr)
+            abs_val = getattr(self, abs_attr)
+
+            st.session_state[norm_attr] = norm_val
+            st.session_state[abs_attr] = abs_val
+            st.session_state[f"last_{norm_attr}"] = norm_val
+            st.session_state[f"last_{abs_attr}"] = abs_val
 
         self.edge_freq = self.filtered_succession_matrix.flatten()
         self.edge_freq = np.unique(self.edge_freq[self.edge_freq >= 0.0])
@@ -412,22 +425,20 @@ class BaseMining(MiningInterface):
         Calculate the normalized frequency of each node (event) in the SPM-filtered log.
 
         Frequencies are calculated across all traces in the log and normalized by the
-        total number of events. This helps identify which events are most common
+        maximum event count. This helps identify which events are most common
         in the process after applying the SPM filtering step.
 
         Returns
         -------
-        dict[str, float]
-            A dictionary with each allowed node label mapped to its normalized frequency.
+        dict[str, int]
+            A dictionary with each allowed node label mapped to its absolute frequency.
         """
         node_counts = Counter()
-        total = 0
         for trace, freq in self.spm_filtered_log.items():
             for event in trace:
                 node_counts[event] += freq
-                total += freq
 
-        if not node_counts or total == 0:
+        if not node_counts:
             return {}
 
         max_count = max(node_counts.values())
@@ -453,8 +464,11 @@ class BaseMining(MiningInterface):
         A, L = self.calculate_A_and_L()
         stats = []
 
+        max_abs = max(self.node_frequencies.values(), default=0)
+
         for node in self.filtered_events:
-            freq = self.node_frequencies.get(node, 0.0)
+            abs_freq = self.node_frequencies.get(node, 0)
+            freq = (abs_freq / max_abs) if max_abs > 0 else 0.0
             spm = self.calculate_spm(
                 node,
                 self.events,
@@ -466,6 +480,7 @@ class BaseMining(MiningInterface):
             stats.append({
                 "node": node,
                 "frequency": freq,
+                "absolute_frequency": abs_freq,
                 "spm": spm
             })
 
@@ -491,12 +506,12 @@ class BaseMining(MiningInterface):
         """
         return self.node_freq_threshold_absolute
 
-    def get_edge_frequencies(self) -> dict:
+    def get_normalized_edge_frequencies(self) -> dict:
         """
         Calculate the normalized frequency of each directly-follows edge in the filtered log.
 
         Frequencies are based on the number of times one event is followed directly
-        by another in the node-frequency-filtered log, normalized by the total number
+        by another in the node-frequency-filtered log, normalized by the maximum count
         of such transitions.
 
         Returns
@@ -506,16 +521,14 @@ class BaseMining(MiningInterface):
             mapped to its normalized frequency.
         """
         edge_counts = Counter()
-        total = 0
         for trace, freq in self.node_frequency_filtered_log.items():
             for i in range(len(trace) - 1):
                 edge = (trace[i], trace[i + 1])
                 edge_counts[edge] += freq
-                total += freq
 
         self.edge_absolute_counts = dict(edge_counts)
 
-        if not edge_counts or total == 0:
+        if not edge_counts:
             return {}
 
         max_count = max(edge_counts.values())
@@ -537,7 +550,7 @@ class BaseMining(MiningInterface):
                 "normalized_frequency": freq,
                 "absolute_frequency": self.edge_absolute_counts.get((a, b), 0)
             }
-            for (a, b), freq in self.edge_frequencies.items()
+            for (a, b), freq in self.normalized_edge_frequencies.items()
             if self.filter_edge(a, b)
         ]
 
@@ -563,7 +576,7 @@ class BaseMining(MiningInterface):
 
     def filter_edge(self, a: str, b: str) -> bool:
         """Return True if edge (a -> b) passes frequency threshold"""
-        return self.edge_frequencies.get((a, b), 0) >= self.edge_freq_threshold_normalized
+        return self.normalized_edge_frequencies.get((a, b), 0) >= self.edge_freq_threshold_normalized
 
     def _init_filter_thresholds(
             self,
@@ -623,7 +636,7 @@ class BaseMining(MiningInterface):
         self.node_frequency_filtered_log = filter_events(self.spm_filtered_log, set(self.spm_filtered_events) - set(
             self.node_frequency_filtered_events))
 
-        self.edge_frequencies = self.get_edge_frequencies()
+        self.normalized_edge_frequencies = self.get_normalized_edge_frequencies()
 
         self.start_nodes = self._get_start_nodes()
         self.end_nodes = self._get_end_nodes()
@@ -671,10 +684,10 @@ class BaseMining(MiningInterface):
             if st.session_state.get(f"last_{norm_attr}") != norm_val:
                 abs_val = int(round(norm_val * max_val))
             elif st.session_state.get(f"last_{abs_attr}") != abs_val:
-                norm_val = (abs_val / max_val)
-            else:
-                # recompute normalized after max_val change
                 norm_val = (abs_val / max_val) if max_val > 0 else 0.0
+            else:
+                # recompute absolute after max_val change
+                abs_val = int(round(norm_val * max_val))
 
         st.session_state[abs_attr] = abs_val
         st.session_state[norm_attr] = norm_val
