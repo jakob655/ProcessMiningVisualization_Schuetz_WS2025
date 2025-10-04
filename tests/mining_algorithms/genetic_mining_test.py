@@ -184,7 +184,7 @@ class TestGeneticMining(unittest.TestCase):
             with self.subTest(trace=trace):
                 parsed_count, is_completed = gm._parse_trace_token_game(individual, trace)
                 self.assertEqual(parsed_count, len(trace) - 1, f"Trace {trace} was fully parsed.")
-                self.assertTrue(is_completed, f"Trace {trace} did not complete correctly (tokens stuck).")
+                self.assertFalse(is_completed, f"Trace {trace} did not complete correctly (tokens stuck).") # TODO: change error message
 
     def test_parse_trace_token_game_deadlock_set(self):
         log = {
@@ -233,7 +233,7 @@ class TestGeneticMining(unittest.TestCase):
             with self.subTest(trace=trace):
                 parsed_count, is_completed = gm._parse_trace_token_game(individual, trace)
                 self.assertEqual(parsed_count, len(trace) - 1, f"Trace {trace} was fully parsed.")
-                self.assertTrue(is_completed, f"Trace {trace} did not complete correctly (tokens stuck).")
+                self.assertFalse(is_completed, f"Trace {trace} did not complete correctly (tokens stuck).") # TODO: change error message
 
     def test_parse_trace_token_game_filtered(self):
         individual = {
@@ -308,7 +308,7 @@ class TestGeneticMining(unittest.TestCase):
         self.assertNotEqual(parsed_count, len(trace),
                             "L2L trace was fully parsed (two-step loop not handled correctly).")
 
-        self.assertTrue(is_completed,
+        self.assertFalse(is_completed,
                         # TODO: ACTUALLY NEEDS TO BE CHANGED TO .assertFalse, but only if completed workaround is solved!
                          "L2L trace was incorrectly marked as properly completed.")
 
@@ -343,7 +343,7 @@ class TestGeneticMining(unittest.TestCase):
         trace_and_invalid = ["A", "Z"]  # only A, not B
         parsed_count_and_inv, completed_and_inv = self.gm._parse_trace_token_game(individual_and, trace_and_invalid)
         self.assertLess(parsed_count_and_inv, 2, "AND semantics failed: Z should not fire without both inputs")
-        self.assertTrue(completed_and_inv)
+        self.assertFalse(completed_and_inv) # TODO: change error message
 
         # AND-of-ORs case: Z requires (A OR B) AND C
         individual_andor = {
@@ -364,7 +364,7 @@ class TestGeneticMining(unittest.TestCase):
         parsed_count_andor_inv, completed_andor_inv = self.gm._parse_trace_token_game(individual_andor,
                                                                                       trace_andor_invalid)
         self.assertLess(parsed_count_andor_inv, 2, "AND-of-ORs semantics failed: Z should not fire without C")
-        self.assertTrue(completed_andor_inv)
+        self.assertFalse(completed_andor_inv) # TODO: change error message
 
         # Multi-OR: Z can fire if any of A, B, or C fired
         individual_multi_or = {
@@ -395,7 +395,7 @@ class TestGeneticMining(unittest.TestCase):
         parsed_count_multi_and_inv, completed_multi_and_inv = self.gm._parse_trace_token_game(individual_multi_and,
                                                                                               trace_multi_and_invalid)
         self.assertLess(parsed_count_multi_and_inv, 3, "Multi-AND semantics failed: Z should not fire without C")
-        self.assertTrue(completed_multi_and_inv)
+        self.assertFalse(completed_multi_and_inv)
 
     def test_fitness_perfect_example_from_paper(self):
         log = {

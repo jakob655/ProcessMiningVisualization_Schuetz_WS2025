@@ -838,20 +838,19 @@ class GeneticMining(BaseMining):
                     group = tuple(sorted(output_set))
                     available_or_bags.add((event, group))
 
-        # TODO: Completion Workaround (needs refinement)
-        if parsed_count < len(trace):
-            is_completed = True
-        else:
-            is_completed = (
-                    all(v == 0 for v in tokens.values())
-                    and not available_or_bags
-            )
-
-        has_self_loop = any(
-            any(act in output_set for output_set in O.get(act, []))
-            for act in activities
+        # Full trace completion check
+        is_completed = (
+            parsed_count == len(trace)  
+            and all(v == 0 for v in tokens.values())  
+            and not available_or_bags  
         )
-        if has_self_loop and parsed_count == len(trace):
+
+        # Check for L1L
+        if any(
+            trace[i] == trace[i - 1] and
+            any(trace[i] in out for out in individual["O"].get(trace[i], []))
+            for i in range(1, len(trace))
+        ):
             is_completed = False
 
         return parsed_count, is_completed
