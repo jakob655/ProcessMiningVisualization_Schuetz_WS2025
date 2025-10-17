@@ -51,6 +51,9 @@ class GeneticMining(BaseMining):
         self.best_individual = None
         self.start_measures = {}
         self.end_measures = {}
+        
+        self.petri_net = None
+
 
         self.logger = get_logger("GeneticMining")
 
@@ -556,6 +559,18 @@ class GeneticMining(BaseMining):
         self._safe_create_edge(place, "End", self.created_edges)
 
         self.logger.debug("[Graph] Finished.")
+
+    def _build_petri_net(self, individual):
+        net = {
+            'places': set(),
+            'transitions': {},
+            'arcs': set(),
+        }
+
+        
+
+
+
 
     def _ensure_self_loop_place(self, a: str):
         place_id = f"p_self_{a}"
