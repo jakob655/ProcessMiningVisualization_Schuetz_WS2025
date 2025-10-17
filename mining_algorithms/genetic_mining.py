@@ -575,15 +575,23 @@ class GeneticMining(BaseMining):
         net['arcs'].add(("Start", "p_start"))
         net['arcs'].add(("p_end", "End"))
 
+        # register visible activites
         for act in individual['activities']:
             self._register_transition(net, act, visible=True)
 
+            # temporarily connect every activity with start and end 
+            net['arcs'].add((start_place, act))
+            net['arcs'].add((act, end_place))
 
+        self.petri_net = net
+        return net
+
+    @staticmethod
     def _register_place(net, place_id):
         if place_id not in net['places']:
             net['places'].add(place_id)
 
-    
+    @staticmethod
     def _register_transition(net, transition_id, visible):
         if transition_id not in net['transitions']:
             net['transitions'][transition_id] = {
