@@ -567,8 +567,30 @@ class GeneticMining(BaseMining):
             'arcs': set(),
         }
 
-        
+        start_place = "p_start"
+        end_place = "p_end"
 
+        self._register_place(net, start_place)
+        self._register_place(net, end_place)
+        net['arcs'].add(("Start", "p_start"))
+        net['arcs'].add(("p_end", "End"))
+
+        for act in individual['activities']:
+            self._register_transition(net, act, visible=True)
+
+
+    def _register_place(net, place_id):
+        if place_id not in net['places']:
+            net['places'].add(place_id)
+
+    
+    def _register_transition(net, transition_id, visible):
+        if transition_id not in net['transitions']:
+            net['transitions'][transition_id] = {
+                'inputs': set(),
+                'outputs': set(),
+                'visible': visible,
+            }
 
 
 
