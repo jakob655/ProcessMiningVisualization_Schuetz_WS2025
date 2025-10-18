@@ -604,7 +604,31 @@ class GeneticMining(BaseMining):
                 pi_place = f"pi_{act}_{idx}_{'_'.join(sorted(in_set))}"
                 self._register_place(net, pi_place)
                 self._add_arc(net, pi_place, act)  #input-place ti activity
+        
+        # invisible transitions
+        tau_counter = 0
+        for act, out_sets in outputs.items():
+            for idx, out_set in enumerate(out_sets):
+                if not out_set:
+                    continue
+                po_place = f"po_{act}_{idx}_{'_'.join(sorted(out_set))}"
+                for succ in out_set:
+                    # create tau transition-id
+                    tau_id = f"tau_{tau_counter}"
+                    tau_counter += 1
+                    # register invisible transition
+                    self._register_transition(net, tau_id, visible=False)
+                    # input-place for successor
+                    pi_place = f"pi_{succ}_0_{act}"
+                    if pi_place not in net['places']:
+                        self._register_place(net, pi_place)
+                        self._add_arc(net, pi_place, succ)
+                    # connect arcs
+                    self._add_arc(net, po_place, tau_id)
+                    self._add_arc(net, tau_id, pi_place)
+        
 
+        self.logger.debug(f"Silent transitions: {tau_counter} ")
         self.petri_net = net
         return net
 
