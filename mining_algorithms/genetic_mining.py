@@ -434,6 +434,9 @@ class GeneticMining(BaseMining):
         self.logger.debug(f"Start activities: {start_activities}")
         self.logger.debug(f"End activities: {end_activities}")
 
+        petri_net = self._build_petri_net(individual)
+        self.logger.debug(f"Petri net structure: {petri_net}")
+
         for act in activities:
             if act not in self.filtered_events:
                 continue
@@ -575,13 +578,32 @@ class GeneticMining(BaseMining):
         net['arcs'].add(("Start", "p_start"))
         net['arcs'].add(("p_end", "End"))
 
+        inputs = individual.get('I', {})
+        outputs = individual.get('O', {})
+        
         # register visible activites
         for act in individual['activities']:
             self._register_transition(net, act, visible=True)
 
-            # temporarily connect every activity with start and end 
-            net['arcs'].add((start_place, act))
-            net['arcs'].add((act, end_place))
+        # output-place for each output-set
+        for act, out_sets in outputs.items():
+            for idx, out_set in enumerate(out_sets):
+                if not out_set:
+                    continue  # if empty ignore
+
+                po_place = f"po_{act}_{idx}_{'_'.join(sorted(out_set))}"
+                self._register_place(net, po_place)
+                self._add_arc(net, act, po_place)  # activity to output-place
+
+        # input-place for each input-set
+        for act, in_sets in inputs.items():
+            for idx, in_set in enumerate(in_sets):
+                if not in_set:
+                    continue  # if empty ignore
+
+                pi_place = f"pi_{act}_{idx}_{'_'.join(sorted(in_set))}"
+                self._register_place(net, pi_place)
+                self._add_arc(net, pi_place, act)  #input-place ti activity
 
         self.petri_net = net
         return net
@@ -599,6 +621,16 @@ class GeneticMining(BaseMining):
                 'outputs': set(),
                 'visible': visible,
             }
+    
+    @staticmethod
+    def _add_arc(net, source, target):
+        net['arcs'].add((source, target))
+        transition = net['transitions'].get(source)
+        if transition is not None:
+            transition['outputs'].add(target)
+        transition = net['transitions'].get(target)
+        if transition is not None:
+            transition['inputs'].add(source)
 
 
 
