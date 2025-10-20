@@ -437,16 +437,13 @@ class GeneticMining(BaseMining):
 
         petri_net = self._build_petri_net(individual)
         self.logger.debug(f"Petri net structure: {petri_net}")
+        individual['_petri_net'] = petri_net
+        self.petri_net = petri_net
+
+        created_edges = set()
 
         for act in activities:
             if act not in self.filtered_events:
-                continue
-
-            # Skip isolated activities (no inputs, no outputs)
-            if (not I.get(act) or all(len(s) == 0 for s in I[act])) and (
-                    not O.get(act) or all(len(s) == 0 for s in O[act])) and not (
-                    act in self.start_nodes or act in self.end_nodes):
-                self.logger.debug(f"[Graph] Skipping isolated activity: {act}")
                 continue
 
             stats = node_stats_map.get(act, {})
@@ -458,109 +455,18 @@ class GeneticMining(BaseMining):
                 absolute_frequency=abs_freq
             )
 
-        # Place & Edge creation
-        self.created_places = set()
-        self.created_edges = set()
-
-        # Pre-calc covered relations for OR/AND
-        covered_relations = set()
-        for act in activities:
-            if act not in self.filtered_events:
+        for transition_id, data in petri_net['transitions'].items():
+            if data['visible']:
                 continue
-            # Input
-            for inp_set in I[act]:
-                if len(inp_set) > 1:
-                    for pred in inp_set:
-                        covered_relations.add((pred, act))
-            # Output
-            for out_set in O[act]:
-                if len(out_set) > 1:
-                    for succ in out_set:
-                        covered_relations.add((act, succ))
+            if not self.graph.contains_node(transition_id):
+                self.graph.add_silent_transition(transition_id)
 
-        for act in activities:
-            if act not in self.filtered_events:
-                continue
+        for place_id in petri_net['places']:
+            if not self.graph.contains_node(place_id):
+                self.graph.add_place(place_id)
 
-            # OUTPUT PLACES
-            for out in O[act]:
-                if not out:
-                    continue
-
-                # If the output set contains the activity itself, split it:
-                if act in out:
-                    self._ensure_self_loop_place(act)
-                    rest = set(out) - {act}
-                    if rest:
-                        place_id = f"p_{act}_{'-'.join(sorted(rest))}"
-                        if place_id not in self.created_places:
-                            self.graph.add_place(place_id)
-                            self._safe_create_edge(act, place_id, self.created_edges)
-                            self.created_places.add(place_id)
-                        for succ in rest:
-                            self._safe_create_edge(place_id, succ, self.created_edges)
-                    continue
-
-                if len(out) == 1:
-                    succ = next(iter(out))
-                    if (act, succ) in covered_relations:
-                        continue
-
-                place_id = f"p_{act}_{'-'.join(sorted(out))}"
-                if place_id not in self.created_places:
-                    self.graph.add_place(place_id)
-                    self._safe_create_edge(act, place_id, self.created_edges)
-                    self.created_places.add(place_id)
-                for succ in out:
-                    self._safe_create_edge(place_id, succ, self.created_edges)
-
-            # INPUT PLACES
-            for inp in I[act]:
-                if not inp:
-                    continue
-
-                # If the input set contains the activity itself, split it:
-                if act in inp:
-                    self._ensure_self_loop_place(act)
-                    rest = set(inp) - {act}
-                    if rest:
-                        place_id = f"p_{'-'.join(sorted(rest))}_{act}"
-                        if place_id not in self.created_places:
-                            self.graph.add_place(place_id)
-                            for pred in rest:
-                                self._safe_create_edge(pred, place_id, self.created_edges)
-                                self.logger.debug(f"[Graph] Edge: {pred} → {place_id}")
-                            self.created_places.add(place_id)
-                        self._safe_create_edge(place_id, act, self.created_edges)
-                    continue
-
-                if len(inp) == 1:
-                    pred = next(iter(inp))
-                    if (pred, act) in covered_relations:
-                        continue
-
-                place_id = f"p_{'-'.join(sorted(inp))}_{act}"
-                if place_id not in self.created_places:
-                    self.graph.add_place(place_id)
-                    for pred in inp:
-                        self._safe_create_edge(pred, place_id, self.created_edges)
-                        self.logger.debug(f"[Graph] Edge: {pred} → {place_id}")
-                    self.created_places.add(place_id)
-                self._safe_create_edge(place_id, act, self.created_edges)
-
-        place = f"p_start"
-        self.graph.add_place(place)
-        self._safe_create_edge("Start", place, self.created_edges)
-        for act in start_activities:
-            self._safe_create_edge(place, act, self.created_edges)
-            self.logger.debug(f"[Graph] Connected Start → {act} via {place}")
-
-        place = f"p_end"
-        self.graph.add_place(place)
-        for act in end_activities:
-            self._safe_create_edge(act, place, self.created_edges)
-            self.logger.debug(f"[Graph] Connected {act} → End via {place}")
-        self._safe_create_edge(place, "End", self.created_edges)
+        for source, target in petri_net['arcs']:
+            self._safe_create_edge(source, target, created_edges)
 
         self.logger.debug("[Graph] Finished.")
 
@@ -633,13 +539,26 @@ class GeneticMining(BaseMining):
                 self._ensure_input_place(net, act, None, pred_to_input_place, activity_input_places, suffix=str(idx), subset=in_set)
 
         # invisible transitions
+        tau_counter = 0
         for act, out_sets in outputs.items():
             for idx, out_set in enumerate(out_sets):
                 if not out_set:
                     continue
                 po_place = f"po_{act}_{idx}_{'_'.join(sorted(out_set))}"
                 for succ in out_set:
-                    self._connect_tau_transition(net, po_place, succ, tau_counter)
+                     # create tau transition-id
+                    tau_id = f"tau_{tau_counter}"
+                    tau_counter += 1
+                    # register invisible transition
+                    self._register_transition(net, tau_id, visible=False)
+                    # input-place for successor
+                    pi_place = f"pi_{succ}_0_{act}"
+                    if pi_place not in net['places']:
+                        self._register_place(net, pi_place)
+                        self._add_arc(net, pi_place, succ)
+                    # connect arcs
+                    self._add_arc(net, po_place, tau_id)
+                    self._add_arc(net, tau_id, pi_place)
         
 
         self.logger.debug(f"Silent transitions: {tau_counter} ")
@@ -672,22 +591,6 @@ class GeneticMining(BaseMining):
             pred_to_input_place[(pred, act)] = place_id
         return place_id
     
-    def _connect_tau_transition(self, net, po_place, succ, tau_counter):
-        """
-        Create and connect a silent transition between two places.
-        """
-        tau_id = f"tau_{next(tau_counter)}"
-        self._register_transition(net, tau_id, visible=False)
-
-        pi_place = f"pi_{succ}_0_{po_place.split('_')[1]}"  # Beispiel: po_A_0_B → pi_B_0_A
-        if pi_place not in net['places']:
-            self._register_place(net, pi_place)
-            self._add_arc(net, pi_place, succ)
-
-        self._add_arc(net, po_place, tau_id)
-        self._add_arc(net, tau_id, succ)
-        return tau_id
-
 
     @staticmethod
     def _register_place(net, place_id):

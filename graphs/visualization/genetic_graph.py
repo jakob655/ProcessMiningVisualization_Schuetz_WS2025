@@ -79,3 +79,13 @@ class GeneticGraph(BaseGraph):
             style="filled",
             fillcolor="#E1E1E1",
         )
+    
+    def add_silent_transition(self, transition_id: str) -> None:
+        """Add a silent (tau) transition to the graph."""
+        super().add_node(
+            id=transition_id,
+            label="tau",
+            shape="box",
+            style="filled",
+            fillcolor="#EDEDED",
+        )
