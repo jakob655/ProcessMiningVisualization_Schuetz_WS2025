@@ -573,6 +573,9 @@ class GeneticMining(BaseMining):
             'initial_marking': {},
             'final_places': set(),
             'start_buffer_places': set(),
+
+            'input_subset_map': {}, 
+            'empty_input_activities': set(),
         }
 
         start_place = "p_start"
@@ -605,14 +608,31 @@ class GeneticMining(BaseMining):
                 self._add_arc(net, act, po_place)  # activity to output-place
 
         # input-place for each input-set
-        for act, in_sets in inputs.items():
-            for idx, in_set in enumerate(in_sets):
-                if not in_set:
-                    continue  # if empty ignore
+        for act in individual['activities']:
+            in_sets = inputs.get(act, [])
+            if not in_sets:  # Case: no Input - Connect with start and place initial Token
+                net['empty_input_activities'].add(act)
+                pi_place = f"pi_{act}_start"
+                self._register_place(net, pi_place)
+                self._add_arc(net, pi_place, act)
+                net['initial_marking'][pi_place] = 1
+                net['start_buffer_places'].add(pi_place)
+                continue
 
+            for idx, in_set in enumerate(in_sets):
+                if not in_set:  # Case: empty Input-Set  -  Assign additional Input-Place and Start-Token
+                    net['empty_input_activities'].add(act)
+                    pi_place = f"pi_{act}_{idx}_empty"
+                    self._register_place(net, pi_place)
+                    self._add_arc(net, pi_place, act)
+                    net['initial_marking'][pi_place] = 1
+                    net['start_buffer_places'].add(pi_place)
+                    continue
+                # Case: normal Input-Set
                 pi_place = f"pi_{act}_{idx}_{'_'.join(sorted(in_set))}"
                 self._register_place(net, pi_place)
-                self._add_arc(net, pi_place, act)  #input-place ti activity
+                self._add_arc(net, pi_place, act)
+                net['input_subset_map'][pi_place] = {'activity': act, 'subset': set(in_set)}
         
         # invisible transitions
         tau_counter = 0
@@ -638,6 +658,7 @@ class GeneticMining(BaseMining):
         
 
         self.logger.debug(f"Silent transitions: {tau_counter} ")
+        self.logger.debug(f"Empty input activities: {net['empty_input_activities']}")
         self.petri_net = net
         return net
 
