@@ -568,6 +568,11 @@ class GeneticMining(BaseMining):
             'places': set(),
             'transitions': {},
             'arcs': set(),
+
+            # not yet needed - important for Token game
+            'initial_marking': {},
+            'final_places': set(),
+            'start_buffer_places': set(),
         }
 
         start_place = "p_start"
@@ -577,6 +582,10 @@ class GeneticMining(BaseMining):
         self._register_place(net, end_place)
         net['arcs'].add(("Start", "p_start"))
         net['arcs'].add(("p_end", "End"))
+
+        net['initial_marking'][start_place] = 1  
+        net['final_places'].add(end_place)
+        net['start_buffer_places'].add(start_place)
 
         inputs = individual.get('I', {})
         outputs = individual.get('O', {})
