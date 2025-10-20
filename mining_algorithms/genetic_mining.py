@@ -1,6 +1,7 @@
 import random
 import threading
 import uuid
+import itertools
 
 import numpy as np
 
@@ -592,6 +593,10 @@ class GeneticMining(BaseMining):
 
         inputs = individual.get('I', {})
         outputs = individual.get('O', {})
+
+        pred_to_input_place = {}
+        activity_input_places = {}
+        tau_counter = itertools.count()
         
         # register visible activites
         for act in individual['activities']:
@@ -612,55 +617,77 @@ class GeneticMining(BaseMining):
             in_sets = inputs.get(act, [])
             if not in_sets:  # Case: no Input - Connect with start and place initial Token
                 net['empty_input_activities'].add(act)
-                pi_place = f"pi_{act}_start"
-                self._register_place(net, pi_place)
-                self._add_arc(net, pi_place, act)
-                net['initial_marking'][pi_place] = 1
-                net['start_buffer_places'].add(pi_place)
+                place_id = self._ensure_input_place(net, act, "Start", pred_to_input_place, activity_input_places, subset=set())
+                net['initial_marking'][place_id] = 1
+                net['start_buffer_places'].add(place_id)
                 continue
 
             for idx, in_set in enumerate(in_sets):
                 if not in_set:  # Case: empty Input-Set  -  Assign additional Input-Place and Start-Token
                     net['empty_input_activities'].add(act)
-                    pi_place = f"pi_{act}_{idx}_empty"
-                    self._register_place(net, pi_place)
-                    self._add_arc(net, pi_place, act)
-                    net['initial_marking'][pi_place] = 1
-                    net['start_buffer_places'].add(pi_place)
+                    place_id = self._ensure_input_place(net, act, "Start", pred_to_input_place, activity_input_places, suffix=str(idx), subset=set())
+                    net['initial_marking'][place_id] = 1
+                    net['start_buffer_places'].add(place_id)
                     continue
                 # Case: normal Input-Set
-                pi_place = f"pi_{act}_{idx}_{'_'.join(sorted(in_set))}"
-                self._register_place(net, pi_place)
-                self._add_arc(net, pi_place, act)
-                net['input_subset_map'][pi_place] = {'activity': act, 'subset': set(in_set)}
-        
+                self._ensure_input_place(net, act, None, pred_to_input_place, activity_input_places, suffix=str(idx), subset=in_set)
+
         # invisible transitions
-        tau_counter = 0
         for act, out_sets in outputs.items():
             for idx, out_set in enumerate(out_sets):
                 if not out_set:
                     continue
                 po_place = f"po_{act}_{idx}_{'_'.join(sorted(out_set))}"
                 for succ in out_set:
-                    # create tau transition-id
-                    tau_id = f"tau_{tau_counter}"
-                    tau_counter += 1
-                    # register invisible transition
-                    self._register_transition(net, tau_id, visible=False)
-                    # input-place for successor
-                    pi_place = f"pi_{succ}_0_{act}"
-                    if pi_place not in net['places']:
-                        self._register_place(net, pi_place)
-                        self._add_arc(net, pi_place, succ)
-                    # connect arcs
-                    self._add_arc(net, po_place, tau_id)
-                    self._add_arc(net, tau_id, pi_place)
+                    self._connect_tau_transition(net, po_place, succ, tau_counter)
         
 
         self.logger.debug(f"Silent transitions: {tau_counter} ")
         self.logger.debug(f"Empty input activities: {net['empty_input_activities']}")
         self.petri_net = net
         return net
+    
+    def _ensure_input_place(self, net, act, pred, pred_to_input_place, activity_input_places, suffix="", subset=None):
+        """
+        Ensure that an input place for (pred -> act) exists and return corresponding ID.
+        Creates a new one if necessary.
+        """
+        if not subset:
+            subset = set()
+        base = f"pi_{act}"
+        if suffix:
+            base += f"_{suffix}"
+        if subset:
+            base += f"_{'-'.join(sorted(subset))}"
+        place_id = base
+
+        if place_id not in net['places']:
+            self._register_place(net, place_id)
+            self._add_arc(net, place_id, act)
+            activity_input_places.setdefault(act, set()).add(place_id)
+
+        # Map subset for later
+        net['input_subset_map'][place_id] = {'activity': act, 'subset': set(subset)}
+        if pred:
+            pred_to_input_place[(pred, act)] = place_id
+        return place_id
+    
+    def _connect_tau_transition(self, net, po_place, succ, tau_counter):
+        """
+        Create and connect a silent transition between two places.
+        """
+        tau_id = f"tau_{next(tau_counter)}"
+        self._register_transition(net, tau_id, visible=False)
+
+        pi_place = f"pi_{succ}_0_{po_place.split('_')[1]}"  # Beispiel: po_A_0_B → pi_B_0_A
+        if pi_place not in net['places']:
+            self._register_place(net, pi_place)
+            self._add_arc(net, pi_place, succ)
+
+        self._add_arc(net, po_place, tau_id)
+        self._add_arc(net, tau_id, succ)
+        return tau_id
+
 
     @staticmethod
     def _register_place(net, place_id):
