@@ -471,100 +471,206 @@ class GeneticMining(BaseMining):
         self.logger.debug("[Graph] Finished.")
 
     def _build_petri_net(self, individual):
+        """
+        Build an internal Petri net (with silent transitions) from the given individual.
+        """
         net = {
-            'places': set(),
-            'transitions': {},
-            'arcs': set(),
-
-            # not yet needed - important for Token game
-            'initial_marking': {},
-            'final_places': set(),
-            'start_buffer_places': set(),
-
-            'input_subset_map': {}, 
-            'empty_input_activities': set(),
+            'places': set(),                 # all unique places in the net
+            'transitions': {},               # mapping transition_id -> {'inputs', 'outputs', 'visible'}
+            'arcs': set(),                   # all (source, target) connections
+            'initial_marking': {},           # marking of tokens at start
+            'final_places': set(),           # end places of the net
+            'start_buffer_places': set(),    # buffer places for start transitions
+            'input_subset_map': {},          # mapping of input places to activity/subset
+            'empty_input_activities': set(), # activities with no input set
         }
 
+        # Define start and end places
         start_place = "p_start"
         end_place = "p_end"
 
+        # Register start and end places
         self._register_place(net, start_place)
         self._register_place(net, end_place)
-        net['arcs'].add(("Start", "p_start"))
-        net['arcs'].add(("p_end", "End"))
 
-        net['initial_marking'][start_place] = 1  
+        # Conditional initial token:
+        # - if start_nodes are defined, start_place stays empty (tokens added later)
+        # - otherwise, put one token on start_place
+        net['initial_marking'][start_place] = 0 if getattr(self, 'start_nodes', None) else 1
+
+        # Register end place and buffer info
         net['final_places'].add(end_place)
         net['start_buffer_places'].add(start_place)
 
-        inputs = individual.get('I', {})
-        outputs = individual.get('O', {})
+        # Add virtual arcs from Start/End labels (for visualization)
+        net['arcs'].add(("Start", start_place))
+        net['arcs'].add((end_place, "End"))
 
-        pred_to_input_place = {}
-        activity_input_places = {}
-        tau_counter = itertools.count()
-        
-        # register visible activites
+        # --- Register all visible activities as transitions ---
         for act in individual['activities']:
             self._register_transition(net, act, visible=True)
 
-        # output-place for each output-set
-        for act, out_sets in outputs.items():
-            for idx, out_set in enumerate(out_sets):
-                if not out_set:
-                    continue  # if empty ignore
+        # Initialize helper structures for mapping input/output connections
+        pred_to_input_place = {}   # (pred, act) -> place_id
+        activity_input_places = {} # act -> set of input places
 
-                po_place = f"po_{act}_{idx}_{'_'.join(sorted(out_set))}"
-                self._register_place(net, po_place)
-                self._add_arc(net, act, po_place)  # activity to output-place
+       # Get input and output sets
+        inputs = individual.get('I', {})
+        outputs = individual.get('O', {})
 
-        # input-place for each input-set
+        # Create input places for each input subset
         for act in individual['activities']:
-            in_sets = inputs.get(act, [])
-            if not in_sets:  # Case: no Input - Connect with start and place initial Token
+            subsets = inputs.get(act) or []
+
+            # Case 1: No input subsets
+            if not subsets:
                 net['empty_input_activities'].add(act)
-                place_id = self._ensure_input_place(net, act, "Start", pred_to_input_place, activity_input_places, subset=set())
-                net['initial_marking'][place_id] = 1
-                net['start_buffer_places'].add(place_id)
+                self._ensure_input_place(
+                    net,
+                    act,
+                    "Start",
+                    pred_to_input_place,
+                    activity_input_places,
+                    subset=set(),
+                )
                 continue
 
-            for idx, in_set in enumerate(in_sets):
-                if not in_set:  # Case: empty Input-Set  -  Assign additional Input-Place and Start-Token
+            # Case 2: Iterate over each input subset
+            for idx, subset in enumerate(subsets):
+                if not subset:
+                    # Empty input subset (start candidate)
                     net['empty_input_activities'].add(act)
-                    place_id = self._ensure_input_place(net, act, "Start", pred_to_input_place, activity_input_places, suffix=str(idx), subset=set())
-                    net['initial_marking'][place_id] = 1
-                    net['start_buffer_places'].add(place_id)
+                    self._ensure_input_place(
+                        net,
+                        act,
+                        "Start",
+                        pred_to_input_place,
+                        activity_input_places,
+                        suffix=str(idx),
+                        subset=set(),
+                    )
                     continue
-                # Case: normal Input-Set
-                self._ensure_input_place(net, act, None, pred_to_input_place, activity_input_places, suffix=str(idx), subset=in_set)
 
-        # invisible transitions
-        tau_counter = 0
-        for act, out_sets in outputs.items():
+                # Normal input subset: create corresponding input place
+                place_id = f"pi_{act}_{idx}_{'-'.join(sorted(subset))}"
+                if place_id not in net['places']:
+                    self._register_place(net, place_id)
+                    self._add_arc(net, place_id, act)
+                    activity_input_places.setdefault(act, set()).add(place_id)
+
+                # Store mapping for later lookups
+                net['input_subset_map'][place_id] = {'activity': act, 'subset': set(subset)}
+
+                # Remember which input place connects a predecessor and successor
+                for pred in subset:
+                    pred_to_input_place[(pred, act)] = place_id
+
+        # Initialize counter for invisible transitions (τ)
+        tau_counter = itertools.count()
+
+        # Build output places and connect via silent transitions
+        for act in individual['activities']:
+            out_sets = outputs.get(act) or []
+
+            # Case 1: No output sets -> connect to end place
+            if not out_sets:
+                place_id = f"po_{act}_sink"
+                self._register_place(net, place_id)
+                self._add_arc(net, act, place_id)
+
+                tau_id = f"tau_{next(tau_counter)}"
+                self._register_transition(net, tau_id, visible=False)
+                self._add_arc(net, place_id, tau_id)
+                self._add_arc(net, tau_id, end_place)
+                continue
+
+            # Case 2: Iterate over each output subset
             for idx, out_set in enumerate(out_sets):
                 if not out_set:
-                    continue
-                po_place = f"po_{act}_{idx}_{'_'.join(sorted(out_set))}"
-                for succ in out_set:
-                     # create tau transition-id
-                    tau_id = f"tau_{tau_counter}"
-                    tau_counter += 1
-                    # register invisible transition
-                    self._register_transition(net, tau_id, visible=False)
-                    # input-place for successor
-                    pi_place = f"pi_{succ}_0_{act}"
-                    if pi_place not in net['places']:
-                        self._register_place(net, pi_place)
-                        self._add_arc(net, pi_place, succ)
-                    # connect arcs
-                    self._add_arc(net, po_place, tau_id)
-                    self._add_arc(net, tau_id, pi_place)
-        
+                    # Empty output set -> sink transition to end
+                    place_id = f"po_{act}_sink_{idx}"
+                    self._register_place(net, place_id)
+                    self._add_arc(net, act, place_id)
 
-        self.logger.debug(f"Silent transitions: {tau_counter} ")
-        self.logger.debug(f"Empty input activities: {net['empty_input_activities']}")
-        self.petri_net = net
+                    tau_id = f"tau_{next(tau_counter)}"
+                    self._register_transition(net, tau_id, visible=False)
+                    self._add_arc(net, place_id, tau_id)
+                    self._add_arc(net, tau_id, end_place)
+                    continue
+
+                # Normal output subset -> connect to successor input places
+                place_id = f"po_{act}_{idx}_{'-'.join(sorted(out_set))}"
+                if place_id not in net['places']:
+                    self._register_place(net, place_id)
+                self._add_arc(net, act, place_id)
+
+                for succ in out_set:
+                    # Find the input place for successor or create it if needed
+                    target_place = pred_to_input_place.get((act, succ))
+                    if target_place is None:
+                        target_place = self._ensure_input_place(
+                            net,
+                            succ,
+                            act,
+                            pred_to_input_place,
+                            activity_input_places,
+                            subset={act},
+                        )
+
+                    # Create invisible τ-transition between po_place and pi_place
+                    tau_id = f"tau_{next(tau_counter)}"
+                    self._register_transition(net, tau_id, visible=False)
+                    self._add_arc(net, place_id, tau_id)
+                    self._add_arc(net, tau_id, target_place)
+
+        # Connect Start place to true start activities
+        for act in individual['activities']:
+            if act not in self.start_nodes:
+                continue
+
+            # Ensure a valid input place for the starting activity
+            target_place = self._ensure_input_place(
+                net,
+                act,
+                "Start",
+                pred_to_input_place,
+                activity_input_places,
+            )
+
+            # Add one token on the input place of each start activity
+            net['initial_marking'][target_place] = net['initial_marking'].get(target_place, 0) + 1
+            net['start_buffer_places'].add(target_place)
+
+            # Create τ from start_place → activity input place
+            tau_id = f"tau_{next(tau_counter)}"
+            self._register_transition(net, tau_id, visible=False)
+            self._add_arc(net, start_place, tau_id)
+            self._add_arc(net, tau_id, target_place)
+
+        # Postprocessing:
+        # Map each output place to silent transitions that follow it
+        output_to_silent = {}
+        for trans_id, data in net['transitions'].items():
+            if not data['visible']:
+                for place in data['outputs']:
+                    output_to_silent.setdefault(place, []).append(trans_id)
+        net['output_to_silent'] = output_to_silent
+
+        # Identify all input places that belong to visible transitions
+        visible_input_places = set()
+        for trans_id, data in net['transitions'].items():
+            if data['visible']:
+                visible_input_places.update(data['inputs'])
+
+        # Identify silent transitions whose outputs are invisible
+        net['forced_silent'] = {
+            trans_id
+            for trans_id, data in net['transitions'].items()
+            if not data['visible'] and all(place not in visible_input_places for place in data['outputs'])
+        }
+
         return net
+
     
     def _ensure_input_place(self, net, act, pred, pred_to_input_place, activity_input_places, suffix="", subset=None):
         """
