@@ -868,159 +868,23 @@ class GeneticMining(BaseMining):
         return fitness
 
     def _parse_trace_token_game(self, individual, trace):
-        """
-        Simulate parsing of a single trace using token-game semantics.
 
-        For each event in the trace:
-        - INPUT semantics: an activity is enabled if all of its input sets are satisfied.
-            * A single input set is satisfied if one of its providers currently holds a token
-              (OR within a set, AND across sets).
-            * Providers may be direct predecessors (AND-tokens), OR-bags, or start events.
-        - When enabled, tokens are consumed from the chosen providers.
-        - Tokens are produced to all OUTPUT sets.
-            * A singleton output gives one token to the successor.
-            * A multi-output set creates an OR-bag, which can be used once.
-        - Self-loops are handled explicitly (tokens may remain on the same activity).
-        - A trace is considered complete if all tokens are consumed at the end. -> NEEDS TO BE FIXED
+        
+        petri_net = individual.get('_petri_net')
+        if petri_net is None:
+            petri_net = self._build_petri_net(individual)
+            individual['_petri_net'] = petri_net
 
-        Parameters
-        ----------
-        individual : dict
-            Individual with activities, I/O sets, and C.
-            Must provide:
-                - 'activities' : list[str]
-                - 'I' : dict[str, list[set[str]]]  (input sets per activity)
-                - 'O' : dict[str, list[set[str]]]  (output sets per activity)
-        trace : list[str]
-            Event sequence to parse.
+        transitions = petri_net['transitions']
+        places = petri_net['places']
 
-        Returns
-        -------
-        tuple[int, bool]
-            Number of parsed events and whether the trace completed properly.
-        """
-        I, O = individual['I'], individual['O']
-        activities = individual['activities']
+        # Initialize all places with zero tokens and copy the initial marking
+        marking = {place: 0 for place in places}
+        for place, tokens in (petri_net.get('initial_marking') or {}).items():
+            marking[place] = tokens
 
-        # Precompute successor relations for faster lookup
-        direct_successors = {act: set() for act in activities}  # singleton outputs
-        or_output_groups = {act: [] for act in activities}  # multi-output OR groups
-        for act in activities:
-            for output_set in (O.get(act, []) or []):
-                if not output_set:
-                    continue
-                if len(output_set) == 1:
-                    direct_successors[act].add(next(iter(output_set)))
-                else:
-                    or_output_groups[act].append(tuple(sorted(output_set)))
-
-        # Token bookkeeping
-        tokens = {act: 0 for act in activities}
-        available_or_bags = set()
         parsed_count = 0
-
-        for event in trace:
-            input_sets = I.get(event, []) or []
-            output_sets = O.get(event, []) or []
-
-            # Skip floating outputs (no real effect, unless it is an end node)
-            has_real_outputs = any(out for out in output_sets if out)
-            if (not output_sets or not has_real_outputs) and (event not in self.end_nodes):
-                continue
-
-            # Skip floating inputs (isolated event, unless start node)
-            has_inputs = bool(input_sets)
-            all_inputs_empty = has_inputs and all(len(s) == 0 for s in input_sets)
-            if all_inputs_empty and (event not in self.start_nodes):
-                continue
-
-            # Track if event can fire
-            can_execute = True
-            chosen_providers = []
-            start_self_available = (event in self.start_nodes)
-
-            # Check each input set (AND across sets)
-            if not input_sets:
-                if event not in self.start_nodes:
-                    can_execute = False
-            else:
-                for input_set in input_sets:
-                    if not input_set:
-                        if event in self.start_nodes:
-                            chosen_providers.append(('none', None))
-                            continue
-                        else:
-                            can_execute = False
-                            break
-
-                    provider = None
-
-                    # Direct predecessor
-                    for predecessor in input_set:
-                        if (event in direct_successors.get(predecessor, set())
-                                and tokens.get(predecessor, 0) > 0):
-                            provider = ('token', predecessor)
-                            break
-
-                    # OR-bag
-                    if provider is None:
-                        for predecessor in input_set:
-                            for group in or_output_groups.get(predecessor, []):
-                                if event in group and (predecessor, group) in available_or_bags:
-                                    provider = ('or', (predecessor, group))
-                                    break
-                            if provider:
-                                break
-
-                    # Start-self
-                    if provider is None and (event in input_set) and start_self_available:
-                        provider = ('start', event)
-                        start_self_available = False
-
-                    if provider is None:
-                        can_execute = False
-                        break
-                    chosen_providers.append(provider)
-
-            # Consume tokens if firing
-            for relation, provider_data in chosen_providers:
-                if relation == 'token':
-                    predecessor = provider_data
-                    tokens[predecessor] -= 1
-                elif relation == 'or':
-                    predecessor, group = provider_data
-                    if (predecessor, group) in available_or_bags:
-                        available_or_bags.remove((predecessor, group))
-
-            if can_execute:
-                parsed_count += 1
-
-            # Produce outputs
-            for output_set in output_sets:
-                if not output_set:
-                    continue
-                if len(output_set) == 1:
-                    tokens[event] += 1
-                else:
-                    group = tuple(sorted(output_set))
-                    available_or_bags.add((event, group))
-
-        # Full trace completion check
-        is_completed = (
-            parsed_count == len(trace)  
-            and all(v == 0 for v in tokens.values())  
-            and not available_or_bags  
-        )
-
-        # Check for L1L
-        if any(
-            trace[i] == trace[i - 1] and
-            any(trace[i] in out for out in individual["O"].get(trace[i], []))
-            for i in range(1, len(trace))
-        ):
-            is_completed = False
-
-        return parsed_count, is_completed
+        trace_sequence = list(trace)
 
     def _crossover(self, parent1, parent2):
         """
