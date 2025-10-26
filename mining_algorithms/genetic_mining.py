@@ -496,7 +496,10 @@ class GeneticMining(BaseMining):
         # Conditional initial token:
         # - if start_nodes are defined, start_place stays empty (tokens added later)
         # - otherwise, put one token on start_place
-        net['initial_marking'][start_place] = 0 if getattr(self, 'start_nodes', None) else 1
+        if hasattr(self, 'start_nodes') and self.start_nodes:
+            net['initial_marking'][start_place] = 0
+        else:
+            net['initial_marking'][start_place] = 1
 
         # Register end place and buffer info
         net['final_places'].add(end_place)
@@ -663,11 +666,19 @@ class GeneticMining(BaseMining):
                 visible_input_places.update(data['inputs'])
 
         # Identify silent transitions whose outputs are invisible
-        net['forced_silent'] = {
-            trans_id
-            for trans_id, data in net['transitions'].items()
-            if not data['visible'] and all(place not in visible_input_places for place in data['outputs'])
-        }
+        forced_silent = set()
+
+        for trans_id, data in net['transitions'].items():
+            # only invisible transitions
+            if not data['visible']:
+                # check if no visible outputs
+                outputs = data['outputs']
+                has_no_visible_outputs = all(place not in visible_input_places for place in outputs)
+
+                if has_no_visible_outputs:
+                    forced_silent.add(trans_id)
+
+        net['forced_silent'] = forced_silent
 
         return net
 
@@ -886,6 +897,19 @@ class GeneticMining(BaseMining):
         parsed_count = 0
         trace_sequence = list(trace)
 
+        for event in trace_sequence:
+            if event not in transitions:
+                continue
+
+            if self._is_enabled(transitions, marking, event):
+                self._fire(transitions, marking, event)
+                parsed_count += 1
+            else:
+                break
+
+        is_completed = (parsed_count == len(trace))
+        return parsed_count, is_completed
+
     def _is_enabled(self, transitions, marking, transition_id):
         """
         Check if transition can fire.
@@ -911,6 +935,23 @@ class GeneticMining(BaseMining):
         # produce for output places
         for place in transition["outputs"]:
             marking[place] = marking.get(place, 0) + 1
+
+    def _fire_silent(self, transitions, marking, forced_silent, max_cycles=999):
+        """
+        Fire all enabled forced (silent) transitions until none are left or a safety cap is reached.
+        This prevents deadlocks caused by pending τ transitions that must fire automatically.
+        """
+        cycles = 0
+        transition_fired = True
+        while transition_fired and cycles < max_cycles: # only continues if still firing 
+            transition_fired = False
+            cycles += 1
+            for tau_id in forced_silent:
+                if self._is_enabled(transitions, marking, tau_id):
+                    self._fire(transitions, marking, tau_id)
+                    transition_fired = True
+        # false if possible loop
+        return cycles < max_cycles
 
     def _crossover(self, parent1, parent2):
         """
