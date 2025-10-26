@@ -897,15 +897,29 @@ class GeneticMining(BaseMining):
         parsed_count = 0
         trace_sequence = list(trace)
 
+        forced_silent = petri_net.get("forced_silent", set())
+
+        # fire any τ transitions before starting
+        self._fire_silent(transitions, marking, forced_silent)
+
         for event in trace_sequence:
             if event not in transitions:
                 continue
+            # fire τ transitions before visible event
+            self._fire_silent(transitions, marking, forced_silent)
 
             if self._is_enabled(transitions, marking, event):
                 self._fire(transitions, marking, event)
                 parsed_count += 1
+
+                #  fire τ transitions after visible event
+                self._fire_silent(transitions, marking, forced_silent)
+
             else:
                 break
+
+        # fire τ transitions final time
+        self._fire_silent(transitions, marking, forced_silent)
 
         is_completed = (parsed_count == len(trace))
         return parsed_count, is_completed
