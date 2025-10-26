@@ -886,6 +886,32 @@ class GeneticMining(BaseMining):
         parsed_count = 0
         trace_sequence = list(trace)
 
+    def _is_enabled(self, transitions, marking, transition_id):
+        """
+        Check if transition can fire.
+        Transition gets enabled if all of its input places have min. one token.
+        """
+        transition = transitions[transition_id]
+        for place in transition["inputs"]:
+            if marking.get(place, 0) <= 0:
+                return False
+        return True
+
+    def _fire(self, transitions, marking, transition_id):
+        """
+        Fire transition:
+        remove/add token
+        """
+        transition = transitions[transition_id]
+
+        # consume from input places
+        for place in transition["inputs"]:
+            marking[place] = marking.get(place, 0) - 1
+
+        # produce for output places
+        for place in transition["outputs"]:
+            marking[place] = marking.get(place, 0) + 1
+
     def _crossover(self, parent1, parent2):
         """
         Perform crossover between two parents at a random activity.
