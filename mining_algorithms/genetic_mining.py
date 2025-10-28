@@ -923,6 +923,65 @@ class GeneticMining(BaseMining):
 
         is_completed = (parsed_count == len(trace))
         return parsed_count, is_completed
+    
+    def _ensure_token(self, place_id, transitions, marking, silent_to_place,
+                  depth=0, visited_places=None, visited_transitions=None):
+        """
+        Recursively ensure that a given place has a token..
+
+        Returns true if the place has a token at the end.
+        """
+
+        # If token on initial place -> Done
+        if marking.get(place_id, 0) > 0:
+            return True
+
+        # Safety stop, to prevent too deep recurssion
+        if depth > len(transitions):
+            return False
+
+        # Initialize sets to prevent loops
+        visited_places = visited_places or set()
+        visited_transitions = visited_transitions or set()
+
+        # If place already visited -> return false
+        if place_id in visited_places:
+            return False
+        visited_places.add(place_id)
+
+        # Check all τ-Transitionen, which have access to this place
+        possible_tau = silent_to_place.get(place_id, [])
+        for tau_id in possible_tau:
+
+            # If already visited -> continue
+            if tau_id in visited_transitions:
+                continue
+
+            inputs = transitions[tau_id]['inputs']
+
+            # Copy for recurssion
+            branch_places = visited_places.copy()
+            branch_transitions = visited_transitions | {tau_id}
+
+            # Check if all inputs for τ can be filled
+            can_fire = True
+            for p_in in inputs:
+                if marking.get(p_in, 0) == 0:
+                    if not self._ensure_token(p_in, transitions, marking, silent_to_place, depth + 1, branch_places, branch_transitions):
+                        can_fire = False
+                        break
+
+            # If all inputs are filled -> Fire
+            if can_fire and self._is_enabled(transitions, marking, tau_id):
+                self._fire(transitions, marking, tau_id)
+
+                # Target has token -> return True
+                if marking.get(place_id, 0) > 0:
+                    return True
+
+        # Target has no token -> return False
+        return False
+
 
     def _is_enabled(self, transitions, marking, transition_id):
         """
