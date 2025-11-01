@@ -549,7 +549,6 @@ class GeneticMining(BaseMining):
                         "Start",
                         pred_to_input_place,
                         activity_input_places,
-                        suffix=str(idx),
                         subset=set(),
                     )
                     continue
@@ -880,7 +879,6 @@ class GeneticMining(BaseMining):
 
     def _parse_trace_token_game(self, individual, trace):
 
-        
         petri_net = individual.get('_petri_net')
         if petri_net is None:
             petri_net = self._build_petri_net(individual)
@@ -897,31 +895,80 @@ class GeneticMining(BaseMining):
         parsed_count = 0
         trace_sequence = list(trace)
 
-        forced_silent = petri_net.get("forced_silent", set())
+        
+        forced_silent = set(petri_net.get("forced_silent") or set())
+        silent_to_place = dict(petri_net.get("output_to_silent") or {})
+        final_places = set(petri_net.get("final_places") or set())
+        start_buffer_places = set(petri_net.get("start_buffer_places") or set())
+        input_subset_map = petri_net.get("input_subset_map") or {}
 
-        # fire any τ transitions before starting
+        # Fire forced τ transitions before start
         self._fire_silent(transitions, marking, forced_silent)
 
+        # Keep track of start tokens already added
+        start_virt_tokens = set()
+
+        # Go through the trace step by step
         for event in trace_sequence:
-            if event not in transitions:
-                continue
-            # fire τ transitions before visible event
+            transition = transitions.get(event)
+            if transition is None or not transition.get('visible', False):
+                break  # if not a valid visible transition -> skip
+
+            required_inputs = list(transition['inputs'])
+            event_enabled = True
+
+            for place_id in required_inputs:
+                # If it is a start activity -> drop a token there if needed
+                subset_meta = input_subset_map.get(place_id)
+                if subset_meta:
+                    subset = subset_meta.get('subset') or set()
+                    if len(subset) == 1 and event in subset and event in self.start_nodes:
+                        key = (event, place_id)
+                        if key not in start_virt_tokens and marking.get(place_id, 0) == 0:
+                            marking[place_id] = 1
+                            start_virt_tokens.add(key) # give this start activity a virtual token
+
+                # Make sure input place actually has a token
+                if marking.get(place_id, 0) == 0:
+                    if not self._ensure_token(place_id, transitions, marking, silent_to_place):
+                        event_enabled = False
+                        break
+
+            if not event_enabled or not self._is_enabled(transitions, marking, event):
+                break  # cant fire this event, stop here
+
+            # Fire transition
+            self._fire(transitions, marking, event)
+            parsed_count += 1
+
+            # Fire forced τ transitions 
             self._fire_silent(transitions, marking, forced_silent)
 
-            if self._is_enabled(transitions, marking, event):
-                self._fire(transitions, marking, event)
-                parsed_count += 1
-
-                #  fire τ transitions after visible event
-                self._fire_silent(transitions, marking, forced_silent)
-
-            else:
-                break
-
-        # fire τ transitions final time
+        #  Last check for silent transitions
         self._fire_silent(transitions, marking, forced_silent)
 
-        is_completed = (parsed_count == len(trace))
+        # Keep only places that still have tokens
+        remaining_tokens = {}
+        for place, tokens in marking.items():
+            if tokens > 0:
+                remaining_tokens[place] = tokens
+
+        # Count tokens that are NOT in final or start places
+        non_final_tokens = 0
+        for place, tokens in remaining_tokens.items():
+            if place not in final_places and place not in start_buffer_places:
+                non_final_tokens += tokens
+
+        # Count tokens that are in final places
+        final_tokens = 0
+        for place, tokens in remaining_tokens.items():
+            if place in final_places:
+                final_tokens += tokens
+
+        # Trace is complete if all events were fired and no tokens left
+        final_ok = True if not final_places else (final_tokens > 0 or not trace_sequence)
+        is_completed = (parsed_count == len(trace_sequence) and non_final_tokens == 0 and final_ok)
+
         return parsed_count, is_completed
     
     def _ensure_token(self, place_id, transitions, marking, silent_to_place,
@@ -1011,8 +1058,8 @@ class GeneticMining(BaseMining):
 
     def _fire_silent(self, transitions, marking, forced_silent, max_cycles=999):
         """
-        Fire all enabled forced (silent) transitions until none are left or a safety cap is reached.
-        This prevents deadlocks caused by pending τ transitions that must fire automatically.
+        Fire all enabled forced silent transitions until none are left or a safety cap is reached.
+        This prevents deadlocks
         """
         cycles = 0
         transition_fired = True
