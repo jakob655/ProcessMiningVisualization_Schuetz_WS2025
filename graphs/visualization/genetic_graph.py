@@ -84,7 +84,7 @@ class GeneticGraph(BaseGraph):
         """Add a silent (tau) transition to the graph."""
         super().add_node(
             id=transition_id,
-            label="tau",
+            label="silent",
             shape="box",
             style="filled",
             fillcolor="#EDEDED",
