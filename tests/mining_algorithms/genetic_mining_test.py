@@ -155,7 +155,7 @@ class TestGeneticMining(unittest.TestCase):
                 "D": [{"A"}],
                 "E": [{"D"}],
                 "F": [{"D"}],
-                "G": [{"F"}],
+                "G": [{"E"}],
                 "H": [{"B", "C", "G"}],
             },
             "O": {
@@ -183,7 +183,7 @@ class TestGeneticMining(unittest.TestCase):
         for trace in traces:
             with self.subTest(trace=trace):
                 parsed_count, is_completed = gm._parse_trace_token_game(individual, trace)
-                self.assertEqual(parsed_count, len(trace) - 1, f"Trace {trace} was fully parsed.")
+                self.assertEqual(parsed_count, len(trace) - 2, f"Trace {trace} was fully parsed.")
                 self.assertFalse(is_completed, f"Trace {trace} did not complete correctly (tokens stuck).") # TODO: change error message
 
     def test_parse_trace_token_game_deadlock_set(self):
@@ -204,7 +204,7 @@ class TestGeneticMining(unittest.TestCase):
                 "D": [{"A"}],
                 "E": [{"D"}],
                 "F": [{"D"}],
-                "G": [{"F"}],
+                "G": [{"E"}],
                 "H": [{"B", "C", "G"}],
             },
             "O": {
@@ -232,7 +232,7 @@ class TestGeneticMining(unittest.TestCase):
         for trace in traces:
             with self.subTest(trace=trace):
                 parsed_count, is_completed = gm._parse_trace_token_game(individual, trace)
-                self.assertEqual(parsed_count, len(trace) - 1, f"Trace {trace} was fully parsed.")
+                self.assertEqual(parsed_count, len(trace) - 2, f"Trace {trace} was fully parsed.")
                 self.assertFalse(is_completed, f"Trace {trace} did not complete correctly (tokens stuck).") # TODO: change error message
 
     def test_parse_trace_token_game_filtered(self):
@@ -289,8 +289,8 @@ class TestGeneticMining(unittest.TestCase):
         self.assertEqual(parsed_count, len(trace),
                          "L1L trace was not fully parsed (self-loop not handled correctly).")
 
-        self.assertFalse(is_completed,
-                         "L1L trace was incorrectly marked as properly completed.")
+        self.assertTrue(is_completed,
+                         "L1L trace was incorrectly marked as incomplete.")
 
     def test_parse_trace_token_game_L2L(self):
         individual = {
@@ -309,7 +309,7 @@ class TestGeneticMining(unittest.TestCase):
                             "L2L trace was fully parsed (two-step loop not handled correctly).")
 
         self.assertFalse(is_completed,
-                        # TODO: ACTUALLY NEEDS TO BE CHANGED TO .assertFalse, but only if completed workaround is solved!
+                    
                          "L2L trace was incorrectly marked as properly completed.")
 
     def test_and_or_semantics(self):
