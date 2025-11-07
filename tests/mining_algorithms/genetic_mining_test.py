@@ -184,7 +184,7 @@ class TestGeneticMining(unittest.TestCase):
             with self.subTest(trace=trace):
                 parsed_count, is_completed = gm._parse_trace_token_game(individual, trace)
                 self.assertEqual(parsed_count, len(trace) - 2, f"Trace {trace} was fully parsed.")
-                self.assertFalse(is_completed, f"Trace {trace} did not complete correctly (tokens stuck).") # TODO: change error message
+                self.assertFalse(is_completed, f"Trace {trace} did not complete correctly (tokens stuck).") 
 
     def test_parse_trace_token_game_deadlock_set(self):
         log = {
@@ -315,86 +315,81 @@ class TestGeneticMining(unittest.TestCase):
     def test_and_or_semantics(self):
         # OR case: Z can fire if A OR B fired
         individual_or = {
-            "activities": {"A", "B", "Z"},
-            "I": {"A": [set()], "B": [set()], "Z": [{"A", "B"}]},
-            "O": {"A": [{"Z"}], "B": [{"Z"}], "Z": [set()]},
-            "C": {("A", "Z"), ("B", "Z")}
+            "activities": {"X", "A", "B", "Z"},
+            "I": {"X": [set()],"A": [{"X"}],"B": [{"X"}],"Z": [{"A", "B"}],},
+            "O": {"X": [{"A", "B"}],"A": [{"Z"}],"B": [{"Z"}],"Z": [set()],},
+            "C": {("X", "A"), ("X", "B"), ("A", "Z"), ("B", "Z")},
         }
-        self.gm.start_nodes = {"A", "B"}
+        self.gm.start_nodes = {"X"}
         self.gm.end_nodes = {"Z"}
-
-        trace_or = ["A", "Z"]
+        
+        trace_or = ["X", "A", "Z"]
         parsed_count_or, completed_or = self.gm._parse_trace_token_game(individual_or, trace_or)
-        self.assertEqual(parsed_count_or, 2, "OR semantics failed: A should enable Z")
+        self.assertEqual(parsed_count_or, len(trace_or), "OR semantics failed: A should enable Z")
         self.assertTrue(completed_or)
 
         # AND case: Z requires both A and B
         individual_and = {
-            "activities": {"A", "B", "Z"},
-            "I": {"A": [set()], "B": [set()], "Z": [{"A"}, {"B"}]},
-            "O": {"A": [{"Z"}], "B": [{"Z"}], "Z": [set()]},
-            "C": {("A", "Z"), ("B", "Z")}
+            "activities": {"X", "A", "B", "Z"},
+            "I": {"X": [set()],"A": [{"X"}],"B": [{"X"}],"Z": [{"A"}, {"B"}],},
+            "O": {"X": [{"A"}, {"B"}],"A": [{"Z"}],"B": [{"Z"}],"Z": [set()],},
+            "C": {("X", "A"), ("X", "B"), ("A", "Z"), ("B", "Z")},
         }
-        trace_and_valid = ["A", "B", "Z"]  # both provided
+        trace_and_valid = ["X", "A", "B", "Z"] # both provided
         parsed_count_and, completed_and = self.gm._parse_trace_token_game(individual_and, trace_and_valid)
-        self.assertEqual(parsed_count_and, 3, "AND semantics failed: A and B should enable Z")
+        self.assertEqual(parsed_count_and, len(trace_and_valid), "AND semantics failed: A and B should enable Z")
         self.assertTrue(completed_and)
 
-        trace_and_invalid = ["A", "Z"]  # only A, not B
+        trace_and_invalid = ["X", "A", "Z"] # only A, not B
         parsed_count_and_inv, completed_and_inv = self.gm._parse_trace_token_game(individual_and, trace_and_invalid)
-        self.assertLess(parsed_count_and_inv, 2, "AND semantics failed: Z should not fire without both inputs")
-        self.assertFalse(completed_and_inv) # TODO: change error message
+        self.assertLess(parsed_count_and_inv, len(trace_and_invalid), "AND semantics failed: Z should not fire without both inputs")
+        self.assertFalse(completed_and_inv)
 
         # AND-of-ORs case: Z requires (A OR B) AND C
         individual_andor = {
-            "activities": {"A", "B", "C", "Z"},
-            "I": {"A": [set()], "B": [set()], "C": [set()], "Z": [{"A", "B"}, {"C"}]},
-            "O": {"A": [{"Z"}], "B": [{"Z"}], "C": [{"Z"}], "Z": [set()]},
-            "C": {("A", "Z"), ("B", "Z"), ("C", "Z")}
+            "activities": {"X", "A", "B", "C", "Z"},
+            "I": {"X": [set()],"A": [{"X"}],"B": [{"X"}],"C": [{"X"}],"Z": [{"A", "B"}, {"C"}],},
+            "O": {"X": [{"A", "B"}, {"C"}],"A": [{"Z"}],"B": [{"Z"}],"C": [{"Z"}],"Z": [set()],},
+            "C": {("X", "A"),("X", "B"),("X", "C"),("A", "Z"),("B", "Z"),("C", "Z"),},
         }
-        self.gm.start_nodes = {"A", "B", "C"}
-        self.gm.end_nodes = {"Z"}
-
-        trace_andor_valid = ["A", "C", "Z"]  # A satisfies first subset, C second
+        trace_andor_valid = ["X", "A", "C", "Z"]
         parsed_count_andor, completed_andor = self.gm._parse_trace_token_game(individual_andor, trace_andor_valid)
-        self.assertEqual(parsed_count_andor, 3, "AND-of-ORs semantics failed: (A or B) and C should enable Z")
+        self.assertEqual(parsed_count_andor, len(trace_andor_valid), "AND-of-ORs semantics failed: (A or B) and C should enable Z")
         self.assertTrue(completed_andor)
 
-        trace_andor_invalid = ["A", "Z"]  # missing C
-        parsed_count_andor_inv, completed_andor_inv = self.gm._parse_trace_token_game(individual_andor,
-                                                                                      trace_andor_invalid)
-        self.assertLess(parsed_count_andor_inv, 2, "AND-of-ORs semantics failed: Z should not fire without C")
-        self.assertFalse(completed_andor_inv) # TODO: change error message
+        trace_andor_invalid = ["X", "A", "Z"] # missing C
+        parsed_count_andor_inv, completed_andor_inv = self.gm._parse_trace_token_game(individual_andor, trace_andor_invalid)
+        
+        self.assertLess(parsed_count_andor_inv, len(trace_andor_invalid), "AND-of-ORs semantics failed: Z should not fire without C")
+        self.assertFalse(completed_andor_inv)
 
         # Multi-OR: Z can fire if any of A, B, or C fired
         individual_multi_or = {
-            "activities": {"A", "B", "C", "Z"},
-            "I": {"A": [set()], "B": [set()], "C": [set()], "Z": [{"A", "B", "C"}]},
-            "O": {"A": [{"Z"}], "B": [{"Z"}], "C": [{"Z"}], "Z": [set()]},
-            "C": {("A", "Z"), ("B", "Z"), ("C", "Z")}
+            "activities": {"X", "A", "B", "C", "Z"},
+            "I": { "X": [set()],"A": [{"X"}],"B": [{"X"}],"C": [{"X"}],"Z": [{"A", "B", "C"}],},
+            "O": {"X": [{"A", "B", "C"}],"A": [{"Z"}],"B": [{"Z"}],"C": [{"Z"}],"Z": [set()],},
+            "C": {("X", "A"),("X", "B"),("X", "C"),("A", "Z"),("B", "Z"),("C", "Z"),},
         }
-        trace_multi_or = ["B", "Z"]
+        trace_multi_or = ["X", "B", "Z"]
         parsed_count_multi_or, completed_multi_or = self.gm._parse_trace_token_game(individual_multi_or, trace_multi_or)
-        self.assertEqual(parsed_count_multi_or, 2, "Multi-OR semantics failed: any of A,B,C should enable Z")
+        self.assertEqual(parsed_count_multi_or, len(trace_multi_or), "Multi-OR semantics failed: any of A,B,C should enable Z")
         self.assertTrue(completed_multi_or)
 
         # Multi-AND: Z requires A AND B AND C
         individual_multi_and = {
-            "activities": {"A", "B", "C", "Z"},
-            "I": {"A": [set()], "B": [set()], "C": [set()], "Z": [{"A"}, {"B"}, {"C"}]},
-            "O": {"A": [{"Z"}], "B": [{"Z"}], "C": [{"Z"}], "Z": [set()]},
-            "C": {("A", "Z"), ("B", "Z"), ("C", "Z")}
+            "activities": {"X", "A", "B", "C", "Z"},
+            "I": {"X": [set()],"A": [{"X"}],"B": [{"X"}],"C": [{"X"}],"Z": [{"A"}, {"B"}, {"C"}],},
+            "O": {"X": [{"A"}, {"B"}, {"C"}],"A": [{"Z"}],"B": [{"Z"}],"C": [{"Z"}],"Z": [set()],},
+            "C": {("X", "A"),("X", "B"),("X", "C"),("A", "Z"),("B", "Z"),("C", "Z"),},
         }
-        trace_multi_and_valid = ["A", "B", "C", "Z"]
-        parsed_count_multi_and, completed_multi_and = self.gm._parse_trace_token_game(individual_multi_and,
-                                                                                      trace_multi_and_valid)
-        self.assertEqual(parsed_count_multi_and, 4, "Multi-AND semantics failed: all three inputs should enable Z")
+        trace_multi_and_valid = ["X", "A", "B", "C", "Z"]
+        parsed_count_multi_and, completed_multi_and = self.gm._parse_trace_token_game(individual_multi_and, trace_multi_and_valid)
+        self.assertEqual(parsed_count_multi_and, len(trace_multi_and_valid), "Multi-AND semantics failed: all three inputs should enable Z")
         self.assertTrue(completed_multi_and)
 
-        trace_multi_and_invalid = ["A", "B", "Z"]  # missing C
-        parsed_count_multi_and_inv, completed_multi_and_inv = self.gm._parse_trace_token_game(individual_multi_and,
-                                                                                              trace_multi_and_invalid)
-        self.assertLess(parsed_count_multi_and_inv, 3, "Multi-AND semantics failed: Z should not fire without C")
+        trace_multi_and_invalid = ["X", "A", "B", "Z"] # missing C
+        parsed_count_multi_and_inv, completed_multi_and_inv = self.gm._parse_trace_token_game(individual_multi_and, trace_multi_and_invalid)
+        self.assertLess(parsed_count_multi_and_inv, len(trace_multi_and_invalid), "Multi-AND semantics failed: Z should not fire without C")
         self.assertFalse(completed_multi_and_inv)
 
     def test_fitness_perfect_example_from_paper(self):

@@ -493,13 +493,8 @@ class GeneticMining(BaseMining):
         self._register_place(net, start_place)
         self._register_place(net, end_place)
 
-        # Conditional initial token:
-        # - if start_nodes are defined, start_place stays empty (tokens added later)
-        # - otherwise, put one token on start_place
-        if hasattr(self, 'start_nodes') and self.start_nodes:
-            net['initial_marking'][start_place] = 0
-        else:
-            net['initial_marking'][start_place] = 1
+        # Initialize the start place with a single token so only one start activity can fire per trace.
+        net['initial_marking'][start_place] = 1
 
         # Register end place and buffer info
         net['final_places'].add(end_place)
@@ -639,9 +634,16 @@ class GeneticMining(BaseMining):
                 activity_input_places,
             )
 
-            # Add one token on the input place of each start activity
-            net['initial_marking'][target_place] = net['initial_marking'].get(target_place, 0) + 1
+            # Remember the input place so leftover start tokens are ignored during completion checks
             net['start_buffer_places'].add(target_place)
+            
+            # If this start activity feeds a self-loop, seed that input place so the first firing succeeds
+            for place_id, meta in net['input_subset_map'].items():
+                if meta.get('activity') == act:
+                    subset = meta.get('subset') or set()
+                    if subset == {act}:
+                        net['initial_marking'][place_id] = net['initial_marking'].get(place_id, 0) + 1
+                        net['start_buffer_places'].add(place_id)  #ToDo unsure if needed
 
             # Create τ from start_place → activity input place
             tau_id = f"tau_{next(tau_counter)}"
@@ -904,9 +906,8 @@ class GeneticMining(BaseMining):
 
         # Fire forced τ transitions before start
         self._fire_silent(transitions, marking, forced_silent)
-
-        # Keep track of start tokens already added
-        start_virt_tokens = set()
+        
+        start_events = getattr(self, "start_nodes", set())
 
         # Go through the trace step by step
         for event in trace_sequence:
@@ -916,23 +917,29 @@ class GeneticMining(BaseMining):
 
             required_inputs = list(transition['inputs'])
             event_enabled = True
+            skip_current_event = False
 
             for place_id in required_inputs:
                 # If it is a start activity -> drop a token there if needed
-                subset_meta = input_subset_map.get(place_id)
-                if subset_meta:
-                    subset = subset_meta.get('subset') or set()
-                    if len(subset) == 1 and event in subset and event in self.start_nodes:
-                        key = (event, place_id)
-                        if key not in start_virt_tokens and marking.get(place_id, 0) == 0:
-                            marking[place_id] = 1
-                            start_virt_tokens.add(key) # give this start activity a virtual token
+                subset_meta = input_subset_map.get(place_id) or {}
+                subset = subset_meta.get('subset') or set()
+                is_start_input = (
+                    subset_meta.get('activity') == event
+                    and not subset
+                    and event in start_events
+                )
 
                 # Make sure input place actually has a token
                 if marking.get(place_id, 0) == 0:
                     if not self._ensure_token(place_id, transitions, marking, silent_to_place):
+                        if is_start_input:
+                            skip_current_event = True
+                            break
                         event_enabled = False
                         break
+            
+            if skip_current_event:
+                continue
 
             if not event_enabled or not self._is_enabled(transitions, marking, event):
                 break  # cant fire this event, stop here
@@ -966,7 +973,7 @@ class GeneticMining(BaseMining):
                 final_tokens += tokens
 
         # Trace is complete if all events were fired and no tokens left
-        final_ok = True if not final_places else (final_tokens > 0 or not trace_sequence)
+        final_ok = True if not final_places else (final_tokens == 1 or not trace_sequence)
         is_completed = (parsed_count == len(trace_sequence) and non_final_tokens == 0 and final_ok)
 
         return parsed_count, is_completed

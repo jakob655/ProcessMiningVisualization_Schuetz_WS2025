@@ -101,7 +101,7 @@ class BaseMining(MiningInterface):
             st.session_state[f"last_{abs_attr}"] = abs_val
 
         self.edge_freq = self.filtered_succession_matrix.flatten()
-        self.edge_freq = np.unique(self.edge_freq[self.edge_freq >= 0.0])
+        self.edge_freq = self.edge_freq[self.edge_freq >= 0.0]
         if self.edge_freq.size == 0:
             self.edge_freq_sorted, self.edge_freq_labels_sorted = [0.0], [1.0]
         else:
@@ -655,7 +655,7 @@ class BaseMining(MiningInterface):
                               self.edge_absolute_counts or {})
 
         self.edge_freq = self.filtered_succession_matrix.flatten()
-        self.edge_freq = np.unique(self.edge_freq[self.edge_freq >= 0.0])
+        self.edge_freq = self.edge_freq[self.edge_freq >= 0.0]
         if self.edge_freq.size == 0:
             self.edge_freq_sorted, self.edge_freq_labels_sorted = [0.0], [1.0]
         else:
