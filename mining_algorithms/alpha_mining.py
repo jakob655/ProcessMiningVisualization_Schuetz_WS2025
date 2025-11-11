@@ -1,6 +1,8 @@
 import itertools
 
+from components.petri_net import PetriNetToolkit, add_petri_net_to_graph
 from graphs.visualization.alpha_graph import AlphaGraph
+from graphs.visualization.genetic_graph import GeneticGraph
 from logger import get_logger
 from mining_algorithms.base_mining import BaseMining
 
@@ -9,6 +11,9 @@ class AlphaMining(BaseMining):
     def __init__(self, log):
         super().__init__(log)
         self.logger = get_logger("AlphaMining")
+        self.use_petri_net = False
+        self.petri_toolkit = PetriNetToolkit()
+        self.petri_net = None
 
         self._calculate_filtered_model_state()
 
@@ -85,8 +90,9 @@ class AlphaMining(BaseMining):
         return yl_set
 
     # Step 6
-    def generate_graph(self, spm_threshold, node_freq_threshold_normalized, node_freq_threshold_absolute):
-        self.graph = AlphaGraph()
+    def generate_graph(self, spm_threshold, node_freq_threshold_normalized, node_freq_threshold_absolute, use_petri_net=False):
+        self.use_petri_net = use_petri_net
+        self.graph = (GeneticGraph if use_petri_net else AlphaGraph)()
 
         self.graph.add_start_node()
 
@@ -99,30 +105,39 @@ class AlphaMining(BaseMining):
         self.recalculate_model_filters()
 
         if not self.filtered_events:
-            # Only show start and end if nothing to visualize
-            self.graph.create_edge("Start", "End")
+            if use_petri_net:
+                self.graph.create_edge("Start", "End")
+            else:
+                self.graph.add_empty_circle("empty_circle_start")
+                self.graph.add_empty_circle("empty_circle_end")
+                self.graph.create_edge("Start", "empty_circle_start")
+                self.graph.create_edge("empty_circle_end", "End")
             return
 
-        self.graph.add_empty_circle("empty_circle_start")
-        self.graph.add_empty_circle("empty_circle_end")
-
-        self.graph.create_edge("Start", "empty_circle_start")
+        if not use_petri_net:
+            self.graph.add_empty_circle("empty_circle_start")
+            self.graph.add_empty_circle("empty_circle_end")
+            self.graph.create_edge("Start", "empty_circle_start")
 
         self._calculate_filtered_model_state()
 
         node_stats_map = {stat["node"]: stat for stat in self.get_node_statistics()}
 
         if not self.yl_set:
-            # If no transitions (yl_set) were found in the model, but there are still start_nodes present,
-            # treat each start_node (also end_node in this case) as a standalone unit from Start to End
-            for start_end_node in self.start_nodes:
-                stats = node_stats_map.get(start_end_node, {})
-                abs_freq = self.filtered_appearance_freqs.get(start_end_node, 0)
-                self.graph.add_event(str(start_end_node), spm=stats["spm"], normalized_frequency=stats["frequency"],
-                                     absolute_frequency=abs_freq)
-                self.graph.create_edge("empty_circle_start", str(start_end_node))
-                self.graph.create_edge(str(start_end_node), "empty_circle_end")
-            self.graph.create_edge("empty_circle_end", "End")
+            if use_petri_net:
+                nodes_to_draw = self.start_nodes.intersection(self.filtered_events)
+                self._render_alpha_petri_net(nodes_to_draw, node_stats_map)
+            else:
+                # If no transitions (yl_set) were found in the model, but there are still start_nodes present,
+                # treat each start_node (also end_node in this case) as a standalone unit from Start to End
+                for start_end_node in self.start_nodes:
+                    stats = node_stats_map.get(start_end_node, {})
+                    abs_freq = self.filtered_appearance_freqs.get(start_end_node, 0)
+                    self.graph.add_event(str(start_end_node), spm=stats["spm"], normalized_frequency=stats["frequency"],
+                                         absolute_frequency=abs_freq)
+                    self.graph.create_edge("empty_circle_start", str(start_end_node))
+                    self.graph.create_edge(str(start_end_node), "empty_circle_end")
+                self.graph.create_edge("empty_circle_end", "End")
             return
 
         # Add nodes (events to draw combined with start and end nodes)
@@ -130,6 +145,10 @@ class AlphaMining(BaseMining):
             self.start_nodes.intersection(self.filtered_events),
             self.end_nodes.intersection(self.filtered_events)
         )
+
+        if use_petri_net:
+            self._render_alpha_petri_net(nodes_to_draw, node_stats_map)
+            return
 
         for node in nodes_to_draw:
             stats = node_stats_map.get(node, {})
@@ -388,6 +407,88 @@ class AlphaMining(BaseMining):
                 for node in event:
                     events_to_draw.append(node)
         return set(events_to_draw)
+    
+    def _render_alpha_petri_net(self, nodes_to_draw, node_stats_map):
+        """
+        This function builds the Petri net using the Alpha algorithm logic and then
+        adds it to the visualization graph. It acts as a bridge between the logical
+        process model and its visual representation.
+        """
+        # Build the Petri net structure based on Alpha miner relations
+        petri_net = self._build_alpha_petri_net(nodes_to_draw)
+        self.petri_net = petri_net
+        # Add the Petri net structure to the visualization graph
+        add_petri_net_to_graph(
+            self.graph,
+            petri_net,
+            nodes_to_draw,
+            node_stats_map,
+            self.filtered_appearance_freqs,
+            logger=self.logger,
+        )
+
+    def _build_alpha_petri_net(self, nodes_to_draw):
+        """
+        Construct a Petri net according to the Alpha Miner algorithm.
+        
+        This method translates those Alpha Miner relationships into a network of places and transitions.
+        """
+        # Initialize the Petri net with a start and end place
+        toolkit = self.petri_toolkit
+        net, start_place, end_place = toolkit.create_base_net()
+        
+        # Normalize node names (ensure consistent string representation)
+        normalized_nodes = {node: str(node) for node in nodes_to_draw}
+        
+        # Register all transitions (visible activities) in the Petri net
+        for node, node_id in normalized_nodes.items():
+            toolkit.register_transition(net, node_id, visible=True, label=str(node))
+            
+        # Counter to create unique place IDs
+        place_counter = itertools.count()
+
+        # Iterate over all YL pairs, which represent relations in the Alpha model
+        for pair in self.yl_set:
+            if len(pair) != 2:
+                continue # Skip wrong pairs
+            A, B = pair[0], pair[1]
+            
+            # Identify valid source and target transitions based on filtered edges
+            valid_sources = [a for a in A if a in normalized_nodes and any(self.filter_edge(a, b) for b in B)]
+            valid_targets = [b for b in B if b in normalized_nodes and any(self.filter_edge(a, b) for a in A)]
+
+            # Skip this pair if no valid transitions remain
+            if not valid_sources or not valid_targets:
+                continue
+            
+            # Create a new place representing the relation
+            place_id = f"p_alpha_{next(place_counter)}"
+            toolkit.register_place(net, place_id)
+            
+             # Connect all valid sources to this place
+            for src in valid_sources:
+                toolkit.add_arc(net, normalized_nodes[src], place_id)
+            
+            # Connect this place to all valid targets (B)
+            for dst in valid_targets:
+                toolkit.add_arc(net, place_id, normalized_nodes[dst])
+
+        # Ensure all transitions are properly connected to start/end places
+        for node, node_id in normalized_nodes.items():
+            transition = net['transitions'].get(node_id)
+            
+            if transition is None:
+                continue
+            # If transition has no input places, connect it to start place
+            if not transition['inputs']:
+                toolkit.add_arc(net, start_place, node_id)
+            # If transition has no output places, connect it to end place
+            if not transition['outputs']:
+                toolkit.add_arc(net, node_id, end_place)
+
+        # Finalize the net structure
+        toolkit.finalize_net(net)
+        return net
 
     def _calculate_filtered_model_state(self):
         self.direct_succession_set = self._calculate_direct_succession()
