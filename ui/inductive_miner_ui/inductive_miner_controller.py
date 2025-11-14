@@ -23,6 +23,8 @@ class InductiveMinerController(BaseAlgorithmController):
             The class for the dataframe transformations. If None is passed, a new instance is created, by default None
         """
         self.traces_threshold = None
+        self.use_petri_net = False
+
 
         if views is None:
             views = [InductiveMinerView()]
@@ -52,10 +54,14 @@ class InductiveMinerController(BaseAlgorithmController):
 
         # set instance variables from session state
         self.traces_threshold = st.session_state.traces_threshold
+        
+        if "inductive_use_petri_net" not in st.session_state:
+            st.session_state.inductive_use_petri_net = self.use_petri_net
+        self.use_petri_net = st.session_state.inductive_use_petri_net
 
     def perform_mining(self) -> None:
         """Performs the mining of the Inductive Miner algorithm."""
-        super().perform_mining(traces_threshold=self.traces_threshold)
+        super().perform_mining(traces_threshold=self.traces_threshold, use_petri_net=self.use_petri_net)
 
     def have_parameters_changed(self) -> bool:
         """Checks if the algorithm parameters have changed.
@@ -68,6 +74,8 @@ class InductiveMinerController(BaseAlgorithmController):
         return (
                 super().have_parameters_changed()
                 or self.mining_model.get_traces_threshold() != self.traces_threshold
+                or getattr(self.mining_model, 'use_petri_net', False) != self.use_petri_net
+
         )
 
     def get_sidebar_values(self) -> dict[str, tuple[int | float, int | float]]:

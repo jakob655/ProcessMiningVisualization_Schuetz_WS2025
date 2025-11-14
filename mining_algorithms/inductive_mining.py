@@ -1,3 +1,6 @@
+import itertools
+from components.petri_net import PetriNetToolkit, add_petri_net_to_graph
+from graphs.visualization.genetic_graph import GeneticGraph
 from graphs.cuts import exclusive_cut, parallel_cut, sequence_cut, loop_cut
 from graphs.dfg import DFG
 from graphs.visualization.inductive_graph import InductiveGraph
@@ -27,9 +30,12 @@ class InductiveMining(BaseMining):
         self.logger = get_logger("InductiveMining")
         self.traces_threshold = 0.2
         self.filtered_log = None
+        self.use_petri_net = False
+        self.petri_toolkit = PetriNetToolkit()
+        self.petri_net = None
 
     def generate_graph(self, spm_threshold: float, node_freq_threshold_normalized: float,
-                       node_freq_threshold_absolute: int, traces_threshold: float):
+                       node_freq_threshold_absolute: int, traces_threshold: float, use_petri_net: bool = False):
         """Generate a graph from the log using the Inductive Mining algorithm.
 
         Parameters
@@ -44,17 +50,27 @@ class InductiveMining(BaseMining):
         traces_threshold : float
             The traces threshold for the filtering of the log.
             All traces with a frequency lower than the threshold * max_trace_frequency will be removed.
+        use_petri_net : bool, optional
+            If True, renders a Petri net representation instead of the process tree view.
         """
         self.traces_threshold = traces_threshold
         self.spm_threshold = spm_threshold
         self.node_freq_threshold_normalized = node_freq_threshold_normalized
         self.node_freq_threshold_absolute = node_freq_threshold_absolute
+        self.use_petri_net = use_petri_net
+
 
         self.recalculate_model_filters()
 
         if not self.filtered_events:
-            self.graph = InductiveGraph(self.filtered_events)
-            self.graph.add_edge("Start", "End", None)
+            if use_petri_net:
+                self.graph = GeneticGraph()
+                self.graph.add_start_node()
+                self.graph.add_end_node()
+                self.graph.create_edge("Start", "End")
+            else:
+                self.graph = InductiveGraph(self.filtered_events)
+                self.graph.add_edge("Start", "End", None)
             return
 
         self.node_sizes = {k: self.calculate_node_size(k) for k in self.filtered_events}
@@ -71,12 +87,155 @@ class InductiveMining(BaseMining):
         self.logger.info("Start Inductive Mining")
         process_tree = self.inductive_mining(self.filtered_log)
         node_stats_map = {stat["node"]: stat for stat in self.get_node_statistics()}
+        
+        if use_petri_net:
+            self._render_inductive_petri_net(process_tree, node_stats_map)
+            return
+        
         self.graph = InductiveGraph(
             process_tree,
             frequency=self.filtered_appearance_freqs,
             node_sizes=self.node_sizes,
             node_stats_map=node_stats_map,
         )
+        
+    def _render_inductive_petri_net(self, process_tree, node_stats_map):
+        # Build Petri net from inductive process tree
+        petri_net = self._build_inductive_petri_net(process_tree)
+        self.petri_net = petri_net
+        self.graph = GeneticGraph()
+        self.graph.add_start_node()
+        self.graph.add_end_node()
+        add_petri_net_to_graph(
+            self.graph,
+            petri_net,
+            self.filtered_events,
+            node_stats_map,
+            self.filtered_appearance_freqs,
+            logger=self.logger,
+        )
+
+    def _build_inductive_petri_net(self, process_tree):
+        toolkit = self.petri_toolkit
+        net, start_place, end_place = toolkit.create_base_net()
+        place_counter = itertools.count()
+        tau_counter = itertools.count()
+        
+        def new_place(prefix):
+            place_id = f"p_im_{prefix}_{next(place_counter)}"
+            toolkit.register_place(net, place_id)
+            return place_id
+
+        def new_tau(prefix):
+            return f"tau_im_{prefix}_{next(tau_counter)}"
+
+        def connect_places(source_place, target_place, prefix):
+            # Connect two places by inserting a silent between
+            tau_id = new_tau(prefix)
+            toolkit.register_transition(net, tau_id, visible=False)
+            toolkit.add_arc(net, source_place, tau_id)
+            toolkit.add_arc(net, tau_id, target_place)
+
+        def register_visible_transition(label):
+            base = str(label)
+            trans_id = base
+            suffix = 1
+            while trans_id in net['transitions']:  # If multiple transitions have the same label -> append incrementing suffix
+                suffix += 1
+                trans_id = f"{base}__{suffix}"
+            toolkit.register_transition(net, trans_id, visible=True, label=base)
+            return trans_id
+
+        def build_fragment(tree):
+            if isinstance(tree, (str, int)):
+                label = str(tree)
+                # Create entry and exit places for the leaf
+                entry = new_place("leaf_in")
+                exit_place = new_place("leaf_out")
+                if label == 'tau':
+                    trans_id = new_tau("silent")
+                    toolkit.register_transition(net, trans_id, visible=False)
+                else:
+                    trans_id = register_visible_transition(label)
+                toolkit.add_arc(net, entry, trans_id)
+                toolkit.add_arc(net, trans_id, exit_place)
+                return entry, exit_place
+
+            if not isinstance(tree, tuple) or not tree:
+                raise ValueError('Invalid process tree node')
+
+            op = tree[0]
+            children = tree[1:]
+
+            if op == 'seq':
+                entry, current_exit = build_fragment(children[0])
+                for child in children[1:]:
+                    child_entry, child_exit = build_fragment(child)
+                    connect_places(current_exit, child_entry, 'seq')
+                    current_exit = child_exit
+                return entry, current_exit
+
+            if op == 'xor':
+                entry = new_place('xor_in')
+                exit_place = new_place('xor_out')
+                
+                # Each branch gets its own fragment, connected with silent transitions
+                for child in children:
+                    child_entry, child_exit = build_fragment(child)
+                    connect_places(entry, child_entry, 'xor_in')
+                    connect_places(child_exit, exit_place, 'xor_out')
+                return entry, exit_place
+
+            if op == 'par':   # Parallel (AND)
+                entry = new_place('par_in')
+                exit_place = new_place('par_out')
+                # Explicit split and join silent transitions.
+                split_id = new_tau('par_split')
+                join_id = new_tau('par_join')
+                
+                toolkit.register_transition(net, split_id, visible=False)
+                toolkit.register_transition(net, join_id, visible=False)
+                toolkit.add_arc(net, entry, split_id)
+                toolkit.add_arc(net, join_id, exit_place)
+                
+                # Each parallel branch connects to split and join
+                for child in children:
+                    child_entry, child_exit = build_fragment(child)
+                    toolkit.add_arc(net, split_id, child_entry)
+                    toolkit.add_arc(net, child_exit, join_id)
+                return entry, exit_place
+
+            if op == 'loop':
+                entry = new_place('loop_in')
+                exit_place = new_place('loop_out')
+                
+                # First child is loop body
+                body_entry, body_exit = build_fragment(children[0])
+                
+                connect_places(entry, body_entry, 'loop_entry')
+                connect_places(body_exit, exit_place, 'loop_exit')
+                
+                 # Remaining childs are redo/return branches
+                for redo in children[1:]:
+                    redo_entry, redo_exit = build_fragment(redo)
+                    connect_places(body_exit, redo_entry, 'loop_redo_in')
+                    connect_places(redo_exit, body_entry, 'loop_redo_back')
+                return entry, exit_place
+
+            raise ValueError(f'Unsupported process tree operator: {op}')
+
+        # Build root fragment and connect it to global start and end places
+        if process_tree:
+            entry, exit_place = build_fragment(process_tree)
+            connect_places(start_place, entry, 'root_start')
+            connect_places(exit_place, end_place, 'root_end')
+        else:
+        # Empty model → direct connection between start and end
+            toolkit.add_arc(net, start_place, end_place)
+
+        toolkit.finalize_net(net)
+        return net
+
 
     def inductive_mining(self, log):
         """Generate a process tree from the log using the Inductive Mining algorithm.

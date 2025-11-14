@@ -1,3 +1,4 @@
+import streamlit as st
 from components.number_input_slider import number_input_slider
 from ui.base_algorithm_ui.base_algorithm_view import BaseAlgorithmView
 
@@ -14,4 +15,11 @@ class InductiveMinerView(BaseAlgorithmView):
             key="traces_threshold",
             help="""The traces threshold parameter determines the minimum frequency of a trace to be included in the graph. 
                     All traces with a frequency that is lower than treshold * max_trace_frequency will be removed. The higher the value, the less traces will be included in the graph.""",
+        )
+
+        st.toggle(
+            "Petri-Net Visualization",
+            key="inductive_use_petri_net",
+            value=st.session_state.get("inductive_use_petri_net", False),
+            help="Switch between classic and petri-net visualization.",
         )
